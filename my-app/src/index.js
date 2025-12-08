@@ -8,7 +8,8 @@ root.render(<App />);
 // Service Worker Logic
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
+   // unregister हटाकर register लिखें
+serviceWorkerRegistration.register();
       .then((reg) => console.log('SW Good:', reg))
       .catch((err) => console.log('SW Bad:', err));
   });
