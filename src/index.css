@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* src/index.css ke end mein add karein */
+
+/* Bolt/Stackblitz branding hide karne ke liye */
+a[href*="bolt.new"], 
+a[href*="stackblitz.com"],
+.sb-badge,
+[class*="bolt-badge"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
