@@ -1,90 +1,124 @@
-import React, { useState, useMemo } from 'react';
-import { ArrowLeft, ArrowRight, Copy, Search, Plus, ArrowLeft as ArrowLeftIcon } from 'lucide-react';
-import EntryRow from '../components/EntryRow';
-import VoiceInput from '../components/VoiceInput';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+// import { useTranslation } from '../utils/translator'; // Uncomment if translator hook exists
+// Agar hook nahi h, to hum temporary logic use karenge niche
 
-const PageView = ({ data, activePageId, setActivePageId, setView, isDark, t, updateQtyBuffer, tempChanges, setEditingEntry, setIsNewEntryOpen, setIsCopyModalOpen }) => {
-  const [pageSearchTerm, setPageSearchTerm] = useState('');
-  const [displayLimit, setDisplayLimit] = useState(50);
+export default function PageView({ route, navigation }: any) {
+  const { pageId, pageName, highlightItemId } = route.params || {}; 
+  
+  // Dummy Data (Isse hata kar apna Firebase Fetch lagana)
+  const [items, setItems] = useState<any[]>([
+    { id: '1', name: 'LED Light', sku: 'L-101', quantity: 10 },
+    { id: '2', name: 'Bumper Guard', sku: 'B-202', quantity: 5 },
+    { id: '3', name: 'Car Mat', sku: 'C-303', quantity: 20 },
+  ]);
+  
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [language, setLanguage] = useState('en'); // Temp translator state
 
-  const activePage = (data.pages || []).find(p => p.id === activePageId);
-  const currentPageIndex = data.pages.findIndex(p => p.id === activePageId);
-  const prevPage = currentPageIndex > 0 ? data.pages[currentPageIndex - 1] : null;
-  const nextPage = currentPageIndex < data.pages.length - 1 ? data.pages[currentPageIndex + 1] : null;
+  // Agar highlightItemId aata hai (Search/Alert se), to scroll/highlight logic
+  useEffect(() => {
+    if (highlightItemId) {
+        console.log(`Highlighting item: ${highlightItemId}`);
+        // ScrollToIndex logic can be added here if list is long
+    }
+  }, [highlightItemId]);
 
-  const pageViewData = useMemo(() => {
-      if (!activePage) return { filteredEntries: [], grandTotal: 0 };
-      const pageEntries = (data.entries || []).filter(e => e.pageId === activePage.id);
-      const safeSearch = pageSearchTerm ? pageSearchTerm.toLowerCase() : '';
-      const filtered = pageEntries.filter(e => e.car && e.car.toLowerCase().includes(safeSearch));
-      const total = pageEntries.reduce((acc, curr) => { 
-          const val = tempChanges[curr.id] !== undefined ? tempChanges[curr.id] : curr.qty; 
-          return acc + val; 
-      }, 0);
-      return { filteredEntries: filtered, grandTotal: total };
-  }, [data.entries, activePage, pageSearchTerm, tempChanges]);
+  // --- FEATURE: INSTANT MOVE UP/DOWN ---
+  const moveItem = (index: number, direction: 'up' | 'down') => {
+    const newItems = [...items];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
 
-  if (!activePage) return <div className={`min-h-screen flex items-center justify-center ${isDark ? 'text-white' : 'text-black'}`}>Page not found...</div>;
+    if (targetIndex >= 0 && targetIndex < newItems.length) {
+      // 1. UI Update (Instant)
+      [newItems[index], newItems[targetIndex]] = [newItems[targetIndex], newItems[index]];
+      setItems(newItems);
 
-  const visibleEntries = pageViewData.filteredEntries.slice(0, displayLimit);
+      // 2. Database Update (Background)
+      // updateFirebaseOrder(newItems);
+      console.log('Order updated in Background'); 
+    }
+  };
+
+  // --- TRANSLATOR TOGGLE ---
+  const toggleLanguage = () => {
+      setLanguage(prev => prev === 'en' ? 'hi' : 'en');
+  };
+
+  const renderItem = ({ item, index }: any) => {
+    const isHighlighted = item.id === highlightItemId; 
+
+    return (
+      <View style={[styles.row, isHighlighted && styles.highlightRow]}>
+        <View style={{ flex: 1 }}>
+           <Text style={styles.itemName}>
+               {language === 'hi' ? `${item.name} (Hi)` : item.name} 
+           </Text>
+           <Text style={styles.itemSku}>SKU: {item.sku}</Text>
+        </View>
+
+        {isEditMode ? (
+          <View style={styles.editControls}>
+            <TouchableOpacity onPress={() => moveItem(index, 'up')} style={styles.iconBtn}>
+               <Ionicons name="arrow-up-circle" size={30} color="#004AAD" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => moveItem(index, 'down')} style={styles.iconBtn}>
+               <Ionicons name="arrow-down-circle" size={30} color="#004AAD" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.qty}>{item.quantity}</Text>
+        )}
+      </View>
+    );
+  };
 
   return (
-    <div className={`pb-24 min-h-screen ${isDark ? 'bg-slate-950 text-white' : 'bg-white text-black'}`}>
-       <div className={`sticky top-0 z-10 border-b-2 shadow-sm ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-red-200'}`}>
-           <div className={`flex items-center p-3 ${isDark ? 'bg-slate-800' : 'bg-red-50'}`}>
-              <button onClick={() => { setView('generalIndex'); setActivePageId(null); }} className="mr-2 p-2"><ArrowLeftIcon/></button>
-              <div className="flex-1">
-                 <div className="flex justify-between items-center">
-                    <p className={`text-xs font-bold uppercase ${isDark ? 'text-slate-400' : 'text-red-400'}`}>{t("Page No")}: {activePage.pageNo}</p>
-                    <div className="flex gap-4 items-center bg-white/10 p-1 rounded-full">
-                         <button onClick={() => setActivePageId(prevPage.id)} disabled={!prevPage} className="h-12 w-12 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg disabled:opacity-30 disabled:bg-gray-400 active:scale-95 transition-transform"><ArrowLeftIcon size={28}/></button>
-                         <button onClick={() => setActivePageId(nextPage.id)} disabled={!nextPage} className="h-12 w-12 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg disabled:opacity-30 disabled:bg-gray-400 active:scale-95 transition-transform"><ArrowRight size={28}/></button>
-                    </div>
-                    <button onClick={() => setIsCopyModalOpen(true)} className={`p-2 rounded-full border ${isDark ? 'bg-slate-700 text-yellow-400 border-slate-500' : 'bg-yellow-100 text-yellow-700 border-yellow-400'}`}><Copy size={20}/></button>
-                 </div>
-                 <h2 className="text-2xl font-black uppercase mt-1">{t(activePage.itemName)}</h2>
-                 <div className="text-xs font-bold opacity-70 mt-1">{t("Total")} {t("Items")}: {pageViewData.grandTotal}</div>
-              </div>
-           </div>
-           <div className={`p-2 flex gap-2 border-t ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-              <div className="relative flex-1">
-                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-                 <input className={`w-full pl-8 py-2 rounded border outline-none ${isDark ? 'bg-slate-900 border-slate-600' : 'bg-gray-50 border-gray-300'}`} placeholder={t("Search Item...")} value={pageSearchTerm} onChange={e => setPageSearchTerm(e.target.value)}/>
-              </div>
-              <VoiceInput onResult={setPageSearchTerm} isDark={isDark}/>
-           </div>
-           <div className={`flex p-2 text-xs font-bold uppercase ${isDark ? 'bg-slate-700' : 'bg-red-100 text-red-900'}`}>
-             <div className="w-6 pl-1">#</div>
-             <div className="flex-[2]">{t("Car Name")}</div>
-             <div className="flex-[1] text-center">{t("Qty")}</div>
-             <div className="w-8 text-center">Ed</div> 
-           </div>
-       </div>
-       
-       <div className="flex flex-col">
-         {visibleEntries.map((entry, index) => (
-             <EntryRow 
-                key={entry.id} 
-                index={index}
-                entry={entry} 
-                t={t} 
-                isDark={isDark} 
-                onUpdateBuffer={updateQtyBuffer} 
-                onEdit={setEditingEntry} 
-                limit={data.settings.limit}
-                tempQty={tempChanges[entry.id]}
-             />
-         ))}
-       </div>
-       
-       {pageViewData.filteredEntries.length > displayLimit && (
-           <button onClick={() => setDisplayLimit(prev => prev + 50)} className="w-full py-6 text-blue-500 font-bold opacity-80 border-t">
-               {t("Load More")}...
-           </button>
-       )}
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={{flexDirection:'row', alignItems:'center'}}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+                <Ionicons name="arrow-back" size={24} color="#333" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{pageName || 'Inventory'}</Text>
+        </View>
+        
+        <View style={{flexDirection:'row', alignItems:'center', gap: 15}}>
+             {/* Translator Icon */}
+            <TouchableOpacity onPress={toggleLanguage} style={styles.transBtn}>
+                <Ionicons name="language" size={20} color="#333" />
+                <Text style={{fontSize:12, fontWeight:'bold'}}>{language.toUpperCase()}</Text>
+            </TouchableOpacity>
 
-       <button onClick={() => setIsNewEntryOpen(true)} className="fixed bottom-24 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg border-2 border-white flex items-center justify-center z-20"><Plus size={28}/></button>
-    </div>
+            <TouchableOpacity onPress={() => setIsEditMode(!isEditMode)}>
+                <Ionicons name={isEditMode ? "checkmark-done-circle" : "create-outline"} size={28} color="#004AAD" />
+            </TouchableOpacity>
+        </View>
+      </View>
+
+      <FlatList 
+        data={items} 
+        renderItem={renderItem} 
+        keyExtractor={item => item.id} 
+        contentContainerStyle={{paddingBottom: 80}}
+      />
+    </View>
   );
-};
-export default PageView;
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff', paddingTop: 40 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderColor: '#eee', backgroundColor:'#fff' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 10 },
+  transBtn: { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'#f0f0f0', padding:6, borderRadius:20},
+  
+  row: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderColor: '#f0f0f0', alignItems: 'center' },
+  highlightRow: { backgroundColor: '#E3F2FD', borderWidth: 1, borderColor: '#004AAD' }, // Blue Highlight
+  itemName: { fontSize: 16, fontWeight: '500', color: '#333' },
+  itemSku: { fontSize: 12, color: '#888', marginTop: 2 },
+  qty: { fontSize: 18, fontWeight: 'bold', color: '#004AAD' },
+  editControls: { flexDirection: 'row', gap: 10 },
+  iconBtn: { padding: 5 }
+});
