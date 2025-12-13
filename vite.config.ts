@@ -20,10 +20,11 @@ export default defineConfig({
       },
     },
   },
-  // FINAL FIX: Use 'tsx' loader instead of 'jsx'
+  // SMART FIX: Sirf .js files ko JSX maano. 
+  // .tsx aur .ts files ko Normal rehne do.
   esbuild: {
-    loader: "tsx", // Ye '!' operator aur HTML dono ko samajhta hai
-    include: /./,
+    loader: "jsx",
+    include: /src\/.*\.jsx?$|node_modules\/.*\.js$/, 
     exclude: [],
   },
   build: {
