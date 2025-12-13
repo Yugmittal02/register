@@ -18,9 +18,11 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
+// Persistence logic
 try {
   enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') console.warn("Multiple tabs open.");
-    else if (err.code === 'unimplemented') console.warn("Persistence not supported.");
+    console.warn("Persistence fallback active:", err.code);
   });
-} catch(e) { console.log("Persistence fallback"); }
+} catch(e) { 
+  console.log("Persistence error", e); 
+}

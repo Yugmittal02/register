@@ -56,9 +56,11 @@ export const convertToHindi = (text) => {
         translationCache.set(strText, exactDictionary[lowerText]);
         return exactDictionary[lowerText];
     }
+
     const translated = strText.split(' ').map(word => {
       const cleanWord = word.replace(/[^a-zA-Z0-9]/g, ""); 
       if (!cleanWord) return word; 
+
       const lowerWord = cleanWord.toLowerCase();
       if (exactDictionary[lowerWord]) return exactDictionary[lowerWord];
       if (!isNaN(cleanWord)) return word;
@@ -69,6 +71,7 @@ export const convertToHindi = (text) => {
         const char = lowerWord[i];
         const next = lowerWord[i+1] || "";
         const double = char + next;
+
         if (soundMap[double] && !['a','e','i','o','u'].includes(char)) {
           hindiWord += soundMap[double];
           i += 2;
@@ -79,13 +82,22 @@ export const convertToHindi = (text) => {
              else if(char === 'i') hindiWord += 'इ';
              else if(char === 'o') hindiWord += 'ओ';
              else if(char === 'u') hindiWord += 'उ';
-          } else { hindiWord += soundMap[char]; }
+          } else {
+             hindiWord += soundMap[char];
+          }
           i++;
-        } else { hindiWord += char; i++; }
+        } else {
+          hindiWord += char;
+          i++;
+        }
       }
       return hindiWord || word;
     }).join(' ');
+      
     translationCache.set(strText, translated);
     return translated;
-  } catch (err) { return text; }
+
+  } catch (err) {
+    return text; 
+  }
 };
