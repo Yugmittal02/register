@@ -12,7 +12,8 @@ import {
   Calculator, Percent, CreditCard, StickyNote, Briefcase, Camera, Image as ImageIcon,
   Share2, Calendar, MoreVertical, History, RefreshCcw, DollarSign,
   Pin, PinOff, PenTool, Highlighter, Circle as CircleIcon, Eraser, Type,
-  RefreshCw, RotateCcw, Printer, FilePlus, Send
+  RefreshCw, RotateCcw, Printer, FilePlus, Send,
+  Bold, Italic, Underline // <--- Added these for Notepad
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -49,7 +50,6 @@ const storage = getStorage(app);
 try {
   enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
-        // Multiple tabs open, persistence can only be enabled in one tab at a time.
         console.warn("Persistence failed: Multiple tabs open. Proceeding without persistence in this tab.");
     } else if (err.code === 'unimplemented') {
         console.warn("Persistence is not supported by this browser.");
@@ -166,7 +166,7 @@ const convertToHindi = (text) => {
   }
 };
 
-// --- SUB-COMPONENTS (DEFINED OUTSIDE TO PREVENT HOOK ERRORS) ---
+// --- SUB-COMPONENTS ---
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -212,7 +212,7 @@ const ToastMessage = ({ message, type, onClose }) => {
   );
 };
 
-// 🛠️ TOOLS COMPONENT
+// 🛠️ TOOLS COMPONENT (UPGRADED)
 const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onTogglePin, shopDetails }) => {
   const [activeTool, setActiveTool] = useState(initialTool);
   const [gstInput, setGstInput] = useState({ price: '', rate: 18, isReverse: false });
@@ -225,7 +225,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
   const [invItems, setInvItems] = useState([]);
   const [invCurrentItem, setInvCurrentItem] = useState({ name: '', qty: 1, rate: 0, gst: 0 });
 
-  // 📝 NOTEPAD STATE
+  // 📝 NOTEPAD STATE (RICH TEXT UPGRADE)
   const [notesView, setNotesView] = useState('list');
   const [notes, setNotes] = useState(() => {
       try {
@@ -238,6 +238,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
   
   const [noteMode, setNoteMode] = useState('text');
   const canvasRef = useRef(null);
+  const contentEditableRef = useRef(null); // Ref for Rich Text
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushType, setBrushType] = useState('pencil');
   const [startPos, setStartPos] = useState({x:0, y:0});
@@ -270,9 +271,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
   
   const calculateBillTotal = () => invItems.reduce((acc, curr) => acc + curr.total, 0);
 
-  // 🚀 NEW: SHARE AS IMAGE FUNCTION
   const shareInvoiceImage = async () => {
-    // Dynamically load html2canvas if not present
     if (!window.html2canvas) {
         const script = document.createElement('script');
         script.src = "https://html2canvas.hertzen.com/dist/html2canvas.min.js";
@@ -283,7 +282,6 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
     const element = document.getElementById('invoice-area');
     if (!element) return;
     
-    // Slight delay to ensure render
     setTimeout(async () => {
         try {
             const canvas = await window.html2canvas(element, { backgroundColor: '#ffffff', scale: 2 });
@@ -291,7 +289,6 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                 if (!blob) return alert("Error creating image");
                 const file = new File([blob], `invoice_${Date.now()}.png`, { type: "image/png" });
 
-                // Try Native Share
                 if (navigator.share) {
                     try {
                         await navigator.share({
@@ -300,15 +297,12 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                             text: `Invoice from ${shopDetails.shopName}`
                         });
                     } catch (err) {
-                        console.log("Share cancelled or failed", err);
-                        // Fallback
                          const link = document.createElement('a');
                         link.href = canvas.toDataURL();
                         link.download = `Invoice_${Date.now()}.png`;
                         link.click();
                     }
                 } else {
-                    // Desktop Download
                     const link = document.createElement('a');
                     link.href = canvas.toDataURL();
                     link.download = `Invoice_${Date.now()}.png`;
@@ -324,14 +318,28 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
   };
 
   // --- NOTEPAD FUNCTIONS ---
+  
+  // Rich Text Formatting Helper
+  const execFormat = (command, value = null) => {
+    document.execCommand(command, false, value);
+    if(contentEditableRef.current) contentEditableRef.current.focus();
+  };
+
   const saveCurrentNote = () => {
-    if(!currentNote.title && !currentNote.body && !currentNote.sketch) { setNotesView('list'); return; }
+    // Get HTML from contentEditable for text mode
+    let bodyContent = currentNote.body;
+    if(noteMode === 'text' && contentEditableRef.current) {
+        bodyContent = contentEditableRef.current.innerHTML;
+    }
+
+    if(!currentNote.title && !bodyContent && !currentNote.sketch) { setNotesView('list'); return; }
+    
     let sketchData = currentNote.sketch;
     if (canvasRef.current && noteMode === 'draw') {
         sketchData = canvasRef.current.toDataURL();
     }
     const now = new Date().toLocaleString();
-    const finalNote = { ...currentNote, date: now, sketch: sketchData };
+    const finalNote = { ...currentNote, body: bodyContent, date: now, sketch: sketchData };
     if(currentNote.id) {
        setNotes(notes.map(n => n.id === currentNote.id ? finalNote : n));
     } else {
@@ -438,11 +446,11 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                 <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100"><ArrowLeft size={20}/></button>
                 <h3 className="font-bold text-xl">Invoice Pro</h3>
                 <div className="flex gap-2">
-                    <button onClick={shareInvoiceImage} className="p-2 bg-green-600 text-white rounded-lg flex items-center gap-1 text-sm font-bold shadow-md"><Share2 size={16}/> Share Image</button>
+                    <button onClick={shareInvoiceImage} className="p-2 bg-green-600 text-white rounded-lg flex items-center gap-1 text-sm font-bold shadow-md"><Share2 size={16}/> Share</button>
                 </div>
              </div>
              
-             {/* REAL INVOICE PREVIEW AREA - FITTED */}
+             {/* PREVIEW AREA */}
              <div className="flex justify-center bg-gray-200 p-2 rounded-lg mb-4 overflow-hidden">
                 <div className="bg-white text-black p-4 border shadow-xl rounded-sm text-xs w-full max-w-[320px]" id="invoice-area">
                     <div className="text-center border-b-2 border-black pb-2 mb-2">
@@ -491,25 +499,34 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                 </div>
              </div>
 
-             {/* INPUTS */}
-             <div className="grid grid-cols-2 gap-2 mb-4">
+             {/* UPDATED: RESTRUCTURED INPUTS FOR MOBILE */}
+             <div className="grid grid-cols-2 gap-2 mb-2">
                  <input className="p-2 border rounded" placeholder="Customer Name" value={invCust.name} onChange={e=>setInvCust({...invCust, name: e.target.value})} />
                  <input className="p-2 border rounded" placeholder="Mobile Number" value={invCust.phone} onChange={e=>setInvCust({...invCust, phone: e.target.value})} />
              </div>
 
              <div className="bg-gray-50 p-3 rounded-lg border mb-4 text-black">
-                 <div className="flex gap-2 mb-2">
-                     <input className="flex-[2] p-2 border rounded font-bold" placeholder="Item Name" value={invCurrentItem.name} onChange={e=>setInvCurrentItem({...invCurrentItem, name: e.target.value})} />
-                     <input type="number" className="flex-1 p-2 border rounded font-bold" placeholder="Qty" value={invCurrentItem.qty} onChange={e=>setInvCurrentItem({...invCurrentItem, qty: parseInt(e.target.value)||1})} />
+                 {/* Item Name - Full Width */}
+                 <div className="mb-2">
+                     <input className="w-full p-2 border rounded font-bold" placeholder="Item Name" value={invCurrentItem.name} onChange={e=>setInvCurrentItem({...invCurrentItem, name: e.target.value})} />
                  </div>
-                 <div className="flex gap-2 mb-2">
-                     <input type="number" className="flex-1 p-2 border rounded" placeholder="Rate (₹)" value={invCurrentItem.rate || ''} onChange={e=>setInvCurrentItem({...invCurrentItem, rate: parseFloat(e.target.value)})} />
-                     <button onClick={addInvItem} className="flex-1 bg-indigo-600 text-white rounded font-bold flex items-center justify-center gap-2"><Plus size={16}/> Add</button>
+                 
+                 {/* Grid for Qty, Rate, and Add Button */}
+                 <div className="grid grid-cols-3 gap-2">
+                     <div className="col-span-1">
+                         <input type="number" className="w-full p-2 border rounded font-bold" placeholder="Qty" value={invCurrentItem.qty} onChange={e=>setInvCurrentItem({...invCurrentItem, qty: parseInt(e.target.value)||1})} />
+                     </div>
+                     <div className="col-span-1">
+                         <input type="number" className="w-full p-2 border rounded" placeholder="Rate" value={invCurrentItem.rate || ''} onChange={e=>setInvCurrentItem({...invCurrentItem, rate: parseFloat(e.target.value)})} />
+                     </div>
+                     <div className="col-span-1">
+                         <button onClick={addInvItem} className="w-full h-full bg-indigo-600 text-white rounded font-bold flex items-center justify-center"><Plus size={20}/></button>
+                     </div>
                  </div>
              </div>
              
              {invItems.length > 0 && 
-                <button onClick={() => setInvItems([])} className="text-red-500 text-xs text-center w-full">Clear All Items</button>
+                <button onClick={() => setInvItems([])} className="text-red-500 text-xs text-center w-full bg-red-50 p-2 rounded">Clear All Items</button>
              }
           </div>
         );
@@ -576,29 +593,29 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                </div>
                {marginInput.mode === 'profit' ? (
                   <>
-                     <input type="number" placeholder="Buying Cost (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
-                     <input type="number" placeholder="Selling Price (₹)" className={commonInputClass} value={marginInput.sell} onChange={e => setMarginInput({...marginInput, sell: e.target.value})} />
-                     {marginInput.cost && marginInput.sell && (
-                         <div className={`p-4 rounded-xl border mt-2 ${parseFloat(marginInput.sell) >= parseFloat(marginInput.cost) ? 'bg-green-50 text-green-900 border-green-200' : 'bg-red-50 text-red-900 border-red-200'}`}>
-                            <div className="flex justify-between text-lg font-bold">
-                               <span>Profit/Loss</span>
-                               <span>₹{(parseFloat(marginInput.sell) - parseFloat(marginInput.cost)).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm mt-1 opacity-80">
-                               <span>Margin</span>
-                               <span>{(((parseFloat(marginInput.sell) - parseFloat(marginInput.cost)) / parseFloat(marginInput.sell)) * 100).toFixed(2)}%</span>
-                            </div>
-                         </div>
-                     )}
+                      <input type="number" placeholder="Buying Cost (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
+                      <input type="number" placeholder="Selling Price (₹)" className={commonInputClass} value={marginInput.sell} onChange={e => setMarginInput({...marginInput, sell: e.target.value})} />
+                      {marginInput.cost && marginInput.sell && (
+                          <div className={`p-4 rounded-xl border mt-2 ${parseFloat(marginInput.sell) >= parseFloat(marginInput.cost) ? 'bg-green-50 text-green-900 border-green-200' : 'bg-red-50 text-red-900 border-red-200'}`}>
+                             <div className="flex justify-between text-lg font-bold">
+                                <span>Profit/Loss</span>
+                                <span>₹{(parseFloat(marginInput.sell) - parseFloat(marginInput.cost)).toFixed(2)}</span>
+                             </div>
+                             <div className="flex justify-between text-sm mt-1 opacity-80">
+                                <span>Margin</span>
+                                <span>{(((parseFloat(marginInput.sell) - parseFloat(marginInput.cost)) / parseFloat(marginInput.sell)) * 100).toFixed(2)}%</span>
+                             </div>
+                          </div>
+                      )}
                   </>
                ) : (
                   <>
-                     <input type="number" placeholder="Original Price (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
-                     <input type="number" placeholder="Discount %" className={commonInputClass} value={marginInput.discount} onChange={e => setMarginInput({...marginInput, discount: e.target.value})} />
-                     <div className="bg-purple-50 p-4 rounded-xl text-purple-900 border border-purple-100">
-                        <div className="flex justify-between mb-1"><span>You Save</span> <span>₹{((parseFloat(marginInput.cost) * marginInput.discount) / 100 || 0).toFixed(2)}</span></div>
-                        <div className="flex justify-between text-xl font-bold border-t border-purple-200 pt-2 mt-2"><span>Payable</span> <span>₹{(parseFloat(marginInput.cost) - ((parseFloat(marginInput.cost) * marginInput.discount) / 100) || 0).toFixed(2)}</span></div>
-                     </div>
+                      <input type="number" placeholder="Original Price (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
+                      <input type="number" placeholder="Discount %" className={commonInputClass} value={marginInput.discount} onChange={e => setMarginInput({...marginInput, discount: e.target.value})} />
+                      <div className="bg-purple-50 p-4 rounded-xl text-purple-900 border border-purple-100">
+                         <div className="flex justify-between mb-1"><span>You Save</span> <span>₹{((parseFloat(marginInput.cost) * marginInput.discount) / 100 || 0).toFixed(2)}</span></div>
+                         <div className="flex justify-between text-xl font-bold border-t border-purple-200 pt-2 mt-2"><span>Payable</span> <span>₹{(parseFloat(marginInput.cost) - ((parseFloat(marginInput.cost) * marginInput.discount) / 100) || 0).toFixed(2)}</span></div>
+                      </div>
                   </>
                )}
            </div>
@@ -644,7 +661,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
            </div>
          );
       case 'notes':
-         // 📝 NOTEPAD UI
+         // 📝 UPDATED NOTEPAD UI
          if(notesView === 'list') {
            const filteredNotes = notes.filter(n => n.title.toLowerCase().includes(noteSearch.toLowerCase()));
            return (
@@ -658,7 +675,9 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                        {filteredNotes.map(note => (
                            <div key={note.id} onClick={() => { setCurrentNote(note); setNotesView('editor'); setNoteMode(note.sketch ? 'draw' : 'text'); }} className="p-4 rounded-xl border bg-white shadow-sm hover:shadow-md transition-all cursor-pointer relative group">
                                <h4 className="font-bold text-lg mb-1 truncate pr-8">{note.title || "Untitled Note"}</h4>
-                               <p className="text-xs text-gray-500 line-clamp-1">{note.body || (note.sketch ? "Contains Drawing" : "No text")}</p>
+                               <p className="text-xs text-gray-500 line-clamp-1">
+                                   {note.body ? note.body.replace(/<[^>]*>?/gm, '') : (note.sketch ? "Contains Drawing" : "No text")}
+                               </p>
                                {note.sketch && <div className="mt-2 h-10 w-full bg-gray-100 rounded overflow-hidden"><img src={note.sketch} className="h-full object-contain opacity-50"/></div>}
                                <span className="text-[10px] text-gray-400 mt-2 block flex items-center gap-1"><Calendar size={10}/> {note.date}</span>
                                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="absolute top-2 right-2 p-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
@@ -669,7 +688,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                </div>
            );
          } else {
-             // EDITOR
+             // RICH EDITOR
              return (
                  <div className={`h-[80vh] flex flex-col ${cardClass} p-0`}>
                      <div className="p-3 border-b flex justify-between items-center bg-yellow-50">
@@ -679,14 +698,28 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                             <button onClick={()=>setNoteMode('draw')} className={`p-1 px-3 rounded text-xs font-bold ${noteMode==='draw' ? 'bg-yellow-100 text-yellow-700' : 'text-gray-400'}`}><PenTool size={14}/></button>
                          </div>
                          <div className="flex items-center gap-2">
-                            {noteMode === 'text' && <VoiceInput onResult={(txt) => setCurrentNote(prev => ({...prev, body: prev.body + ' ' + txt}))} isDark={isDark} />}
                             <button onClick={saveCurrentNote} className="text-yellow-600 font-bold text-sm">Save</button>
                          </div>
                      </div>
                      <input className="p-4 text-xl font-bold outline-none bg-transparent border-b" placeholder="Title" value={currentNote.title} onChange={e => setCurrentNote({...currentNote, title: convertToHindi(e.target.value)})} />
                      
                      {noteMode === 'text' ? (
-                        <textarea className="flex-1 p-4 resize-none outline-none text-base leading-relaxed bg-transparent" placeholder="Start typing (English -> Hindi)..." value={currentNote.body} onChange={e => setCurrentNote({...currentNote, body: convertToHindi(e.target.value)})}></textarea>
+                        <>
+                            {/* UPDATED: RICH TEXT TOOLBAR */}
+                            <div className="flex gap-1 p-2 bg-gray-50 border-b overflow-x-auto">
+                                <button className="p-2 hover:bg-gray-200 rounded" onMouseDown={(e) => {e.preventDefault(); execFormat('bold');}}><Bold size={16}/></button>
+                                <button className="p-2 hover:bg-gray-200 rounded" onMouseDown={(e) => {e.preventDefault(); execFormat('italic');}}><Italic size={16}/></button>
+                                <button className="p-2 hover:bg-gray-200 rounded" onMouseDown={(e) => {e.preventDefault(); execFormat('underline');}}><Underline size={16}/></button>
+                                <button className="p-2 hover:bg-gray-200 rounded bg-yellow-100" onMouseDown={(e) => {e.preventDefault(); execFormat('hiliteColor', 'yellow');}}><Highlighter size={16} className="text-yellow-600"/></button>
+                            </div>
+                            <div 
+                                ref={contentEditableRef}
+                                className="flex-1 p-4 resize-none outline-none text-base leading-relaxed bg-transparent overflow-y-auto"
+                                contentEditable={true}
+                                dangerouslySetInnerHTML={{__html: currentNote.body || ''}}
+                                placeholder="Start typing..."
+                            ></div>
+                        </>
                      ) : (
                         <div className="flex-1 relative bg-white overflow-hidden touch-none">
                            <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-white shadow-lg border rounded-full p-1 flex gap-2 z-10">
@@ -1447,12 +1480,31 @@ function DukanRegister() {
              <TranslateBtn />
          </div>
 
+         {/* UPDATED: PHOTO LIMIT & PRICING DISPLAY */}
          <div className={`p-6 rounded-2xl border-2 border-dashed mb-6 flex flex-col items-center justify-center gap-3 ${isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-300 bg-white'}`}>
+             
+             {/* Usage Bar */}
+             <div className="w-full mb-2">
+                 <div className="flex justify-between text-xs font-bold mb-1 opacity-70">
+                     <span>Storage Used</span>
+                     <span>{data.bills.length} / 50</span>
+                 </div>
+                 <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                     <div 
+                         className={`h-full ${data.bills.length >= 50 ? 'bg-red-500' : 'bg-green-500'}`} 
+                         style={{width: `${(data.bills.length / 50) * 100}%`}}
+                     ></div>
+                 </div>
+                 {/* Cost Message */}
+                 <p className="text-[10px] text-center mt-2 text-red-500 font-bold bg-red-50 p-1 rounded">
+                     {data.bills.length >= 50 ? "⚠️ Limit Reached. Upgrade Plan @ ₹50/Month" : "Free Plan Limit: 50 Photos"}
+                 </p>
+             </div>
+
              <div className="bg-blue-100 p-4 rounded-full text-blue-600">
                  <Camera size={32} />
              </div>
              <p className="font-bold text-center">{t("Take Photo of Bill")}</p>
-             {/* REMOVED 5G STORAGE TEXT HERE AS REQUESTED */}
              
              <label className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg active:scale-95 cursor-pointer flex items-center gap-2">
                  <Smartphone size={20}/> {t("Open Camera")}
@@ -1460,14 +1512,13 @@ function DukanRegister() {
              </label>
          </div>
 
-         <h3 className="font-bold mb-4 opacity-70 uppercase text-xs tracking-widest">{t("Recent Bills")} (Max 50)</h3>
+         <h3 className="font-bold mb-4 opacity-70 uppercase text-xs tracking-widest">{t("Recent Bills")}</h3>
          
          <div className="grid grid-cols-2 gap-4">
              {(!data.bills || data.bills.length === 0) && <p className="col-span-2 text-center opacity-50 italic">No bills uploaded yet.</p>}
              
              {(data.bills || []).sort((a,b) => new Date(b.date) - new Date(a.date)).map(bill => (
                  <div key={bill.id} onClick={() => setViewImage(bill.image ? bill.image : bill)} className={`rounded-xl overflow-hidden border shadow-sm relative group cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-                     {/* Backward compatibility check for image src */}
                      <img src={bill.image ? bill.image : bill} alt="Bill" className="w-full h-40 object-cover" />
                      <div className="p-2">
                          <p className="text-[10px] opacity-70">{new Date(bill.date || Date.now()).toLocaleDateString()}</p>
@@ -1613,19 +1664,19 @@ function DukanRegister() {
         
         <div className="flex flex-col gap-3">
             {globalSearchResults.pages.map((page, idx) => {
-                 const totalItems = pageCounts[page.id] || 0;
-                 return (
-                    <div key={page.id} onClick={() => { setActivePageId(page.id); setView('page'); setPageSearchTerm(''); }} className={`relative p-4 rounded-xl border-2 shadow-sm cursor-pointer active:scale-95 transition-all flex flex-row items-center justify-between h-24 ${isDark ? 'bg-slate-800 border-slate-600 hover:border-blue-500' : 'bg-white border-gray-200 hover:border-blue-500'}`}>
-                        <div className="flex items-center gap-4">
-                             <div className="bg-gray-100 rounded p-2 border font-bold text-gray-500">#{page.pageNo}</div>
-                             <div>
-                                <h3 className={`font-bold text-xl leading-tight ${isDark ? 'text-white' : 'text-gray-800'}`}>{t(page.itemName)}</h3>
-                                <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{totalItems} Pcs</span>
-                             </div>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); setManagingPage(page); setInput({...input, itemName: page.itemName}); }} className="p-3 text-blue-500 hover:bg-blue-50 rounded-full border border-blue-100"><Edit size={24}/></button>
-                    </div>
-                 )
+                  const totalItems = pageCounts[page.id] || 0;
+                  return (
+                     <div key={page.id} onClick={() => { setActivePageId(page.id); setView('page'); setPageSearchTerm(''); }} className={`relative p-4 rounded-xl border-2 shadow-sm cursor-pointer active:scale-95 transition-all flex flex-row items-center justify-between h-24 ${isDark ? 'bg-slate-800 border-slate-600 hover:border-blue-500' : 'bg-white border-gray-200 hover:border-blue-500'}`}>
+                         <div className="flex items-center gap-4">
+                              <div className="bg-gray-100 rounded p-2 border font-bold text-gray-500">#{page.pageNo}</div>
+                              <div>
+                                 <h3 className={`font-bold text-xl leading-tight ${isDark ? 'text-white' : 'text-gray-800'}`}>{t(page.itemName)}</h3>
+                                 <span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{totalItems} Pcs</span>
+                              </div>
+                         </div>
+                         <button onClick={(e) => { e.stopPropagation(); setManagingPage(page); setInput({...input, itemName: page.itemName}); }} className="p-3 text-blue-500 hover:bg-blue-50 rounded-full border border-blue-100"><Edit size={24}/></button>
+                     </div>
+                  )
             })}
         </div>
         <button onClick={() => setIsNewPageOpen(true)} className="fixed bottom-24 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-xl border-2 border-white flex items-center justify-center active:scale-95 z-20"><Plus size={28}/></button>
@@ -2098,4 +2149,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-}
+                  }
