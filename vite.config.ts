@@ -8,16 +8,22 @@ export default defineConfig({
     alias: {
       'react-native': 'react-native-web',
     },
-    // Ye ensure karega ki web extensions pehle pick hon
-    extensions: ['.web.js', '.js', '.web.ts', '.ts', '.web.tsx', '.tsx', '.jsx'],
   },
-  // YE WALA PART ERROR FIX KAREGA
+  // 1. Fix for Development Server
   optimizeDeps: {
     esbuildOptions: {
       loader: {
-        '.js': 'jsx', // .js files ko JSX ki tarah padho
+        '.js': 'jsx',
       },
     },
+  },
+  // 2. Fix for Production Build (VERCEL FIX)
+  esbuild: {
+    loader: "jsx",
+    // This Regex tells Vite: "Check ALL files (.js, .jsx, etc) for JSX code"
+    // even if they are in node_modules
+    include: /.*\.(js|jsx|ts|tsx)$/, 
+    exclude: [], 
   },
   build: {
     commonjsOptions: {
