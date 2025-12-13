@@ -1,7 +1,7 @@
-Set-Content package.json '{
+{
   "name": "automation-app-final",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -35,4 +35,4 @@ Set-Content package.json '{
     "typescript": "^5.3.3",
     "vite": "^5.1.0"
   }
-}'
+}
