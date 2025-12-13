@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, Briefcase, ChevronRight, Store, Copy, Lock, ShieldCheck, Bell, CheckCircle, FileText, HelpCircle, MessageSquare, ExternalLink, LogOut } from 'lucide-react';
+import { Settings, Briefcase, ChevronRight, Store, Copy, Lock, LogOut } from 'lucide-react';
+import TranslateBtn from '../components/TranslateBtn';
 
-const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToast, triggerConfirm, handleLogout }) => {
+const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToast, triggerConfirm, handleLogout, isHindi, onToggleHindi }) => {
   const [settingsUnlocked, setSettingsUnlocked] = useState(false);
   const [settingsPassInput, setSettingsPassInput] = useState('');
   const [newProductPass, setNewProductPass] = useState('');
@@ -9,12 +10,20 @@ const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToas
 
   const handleSettingsUnlock = () => {
      const currentPass = data.settings.productPassword || '0000';
-     if(settingsPassInput === currentPass || settingsPassInput === '0000' || settingsPassInput === '123456') {
+     if(settingsPassInput === currentPass || settingsPassInput === '0000') {
          setSettingsUnlocked(true);
          showToast(t("Settings Unlocked"));
      } else { 
          showToast(t("Wrong Password!"), "error");
      }
+  };
+
+  const handleUpdatePassword = () => {
+      triggerConfirm("Change Password?", "Update product security password?", false, async () => {
+          await pushToFirebase({...data, settings: {...data.settings, productPassword: newProductPass}});
+          setNewProductPass('');
+          showToast(t("Product Password Updated!"));
+      });
   };
 
   if (!settingsUnlocked) {
@@ -31,7 +40,10 @@ const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToas
 
   return (
     <div className={`p-4 pb-24 min-h-screen ${isDark ? 'bg-slate-900 text-white' : 'bg-gray-50 text-black'}`}>
-       <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2></div>
+       <div className="flex justify-between items-center mb-6">
+           <h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2>
+           <TranslateBtn isHindi={isHindi} onToggle={onToggleHindi} isDark={isDark} />
+       </div>
        
        <div className="mb-6">
            <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Business Utility")}</p>
@@ -53,13 +65,22 @@ const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToas
                     <div className="p-2 bg-purple-200 rounded"><Store size={20} className="text-purple-700"/></div>
                 </div>
            </div>
-           {/* ID Section */}
+           
            <div className={`p-4 rounded-xl border mb-3 border-orange-300 ${isDark ? 'bg-slate-800' : 'bg-orange-50'}`}>
                <label className="font-bold block mb-1 text-orange-800 text-xs uppercase">{t("Customer ID")}</label>
                <div className="flex gap-2 items-center">
                    <code className="flex-1 p-2 bg-white/50 border border-orange-200 rounded font-mono text-sm break-all select-all text-orange-900">{user.uid}</code>
                    <button onClick={() => { navigator.clipboard.writeText(user.uid); showToast("ID Copied!"); }} className="p-2 bg-orange-500 text-white rounded-lg shadow"><Copy size={20}/></button>
                </div>
+           </div>
+       </div>
+
+       <div className="mb-6">
+           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Security")}</p>
+           <div className={`p-4 rounded-xl border mb-3 border-blue-300 ${isDark ? 'bg-slate-800' : 'bg-blue-50'}`}>
+             <label className="font-bold block mb-2 text-blue-600 text-xs uppercase">{t("Change Product Password")}</label>
+             <input type="text" placeholder={t("New Product Password")} className="w-full p-2 border rounded mb-2 text-black" value={newProductPass} onChange={e => setNewProductPass(e.target.value)}/>
+             <button onClick={handleUpdatePassword} className="w-full py-2 bg-blue-600 text-white font-bold rounded text-sm shadow-md active:scale-95">{t("Update Password")}</button>
            </div>
        </div>
 
@@ -83,7 +104,7 @@ const SettingsPage = ({ data, isDark, t, setView, pushToFirebase, user, showToas
            </div>
        </div>
 
-       <button onClick={handleLogout} className="w-full py-3 border-2 border-red-400 bg-red-50 text-red-600 rounded-lg font-bold flex items-center justify-center gap-2"><LogOut size={20}/> {t("Logout Shop")}</button>
+       <button onClick={handleLogout} className="w-full py-3 border-2 border-red-400 bg-red-50 text-red-600 rounded-lg font-bold flex items-center justify-center gap-2 mb-10"><LogOut size={20}/> {t("Logout Shop")}</button>
     </div>
   );
 };

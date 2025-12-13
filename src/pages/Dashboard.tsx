@@ -1,8 +1,9 @@
 import React from 'react';
-import { Wifi, WifiOff, Search, Edit, X, Percent, StickyNote, Calculator, CreditCard, RefreshCcw, Languages, FileText } from 'lucide-react';
+import { Wifi, WifiOff, Search, Edit, X } from 'lucide-react';
 import VoiceInput from '../components/VoiceInput';
+import TranslateBtn from '../components/TranslateBtn';
 
-const Dashboard = ({ data, isDark, isOnline, t, indexSearchTerm, setIndexSearchTerm, globalSearchResults, setView, setActivePageId, setManagingPage, setInput }) => {
+const Dashboard = ({ data, isDark, isOnline, t, indexSearchTerm, setIndexSearchTerm, globalSearchResults, setView, setActivePageId, setManagingPage, setInput, isHindi, onToggleHindi }) => {
     return (
     <div className="pb-24">
       <div className={`p-6 border-b-4 double sticky top-0 z-10 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-yellow-100 border-yellow-400'}`}>
@@ -12,6 +13,7 @@ const Dashboard = ({ data, isDark, isOnline, t, indexSearchTerm, setIndexSearchT
           </h1>
           <div className="flex gap-2">
               {isOnline ? <Wifi className="text-green-600"/> : <WifiOff className="text-red-500 animate-pulse"/>}
+              <TranslateBtn isHindi={isHindi} onToggle={onToggleHindi} isDark={isDark} />
           </div>
         </div>
         <div className="flex gap-2 mt-3">
@@ -37,8 +39,9 @@ const Dashboard = ({ data, isDark, isOnline, t, indexSearchTerm, setIndexSearchT
               <div className="w-12 text-center font-bold text-red-600 border-r border-gray-300 h-full flex items-center justify-center text-sm">{page.pageNo}</div>
               <div className="flex-1 pl-3 font-semibold text-lg border-r border-gray-300 h-full flex items-center truncate">{t(page.itemName)}</div>
               <div className="w-16 text-center font-bold text-blue-700 h-full flex items-center justify-center underline border-r border-gray-300">{page.pageNo}</div>
-              <div className="w-12 flex items-center justify-center h-full" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => { setManagingPage(page); setInput({itemName: page.itemName}); }} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-full">
+              <div className="w-12 flex items-center justify-center h-full">
+                  {/* Stopped Propagation here so clicking edit doesn't open the page */}
+                  <button onClick={(e) => { e.stopPropagation(); setManagingPage(page); setInput({itemName: page.itemName}); }} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-full active:scale-95">
                       <Edit size={18}/>
                   </button>
               </div>
