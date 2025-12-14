@@ -1128,6 +1128,7 @@ function DukanRegister() {
 
   const [data, setData] = useState(defaultData);
   const [dbLoading, setDbLoading] = useState(false);
+  const [fbDocId, setFbDocId] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
     
   const [view, setView] = useState('generalIndex'); 
@@ -1253,6 +1254,8 @@ function DukanRegister() {
 
     const unsubDb = onSnapshot(doc(db, "appData", user.uid), (docSnapshot) => {
       if (docSnapshot.exists()) {
+        // store doc id for diagnostics / admin contact display
+        setFbDocId(docSnapshot.id);
         const cloudData = docSnapshot.data();
         if(!cloudData.settings) cloudData.settings = defaultData.settings;
         if(!cloudData.settings.pinnedTools) cloudData.settings.pinnedTools = []; 
@@ -2035,6 +2038,26 @@ function DukanRegister() {
     );
   }
 
+  // If the app status is set to 'blocked' in Firestore, show a blocking screen
+  if (data && data.appStatus === 'blocked') {
+    const fid = fbDocId || (user && user.uid) || 'Unknown';
+    return (
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-white dark:bg-slate-900 p-6">
+        <div className="max-w-xl w-full bg-white dark:bg-slate-800 border rounded-xl shadow-xl p-6 text-center">
+          <h2 className="text-2xl font-extrabold text-red-600 mb-2">Account Blocked</h2>
+          <p className="mb-4 text-gray-700 dark:text-gray-300">Your shop has been blocked by the administrator.
+            Payment is pending and access has been restricted until the issue is resolved.</p>
+          <p className="text-sm mb-4"><strong>Firebase ID:</strong> {fid}</p>
+          <p className="text-sm mb-6">Please contact the administrator to resolve billing or account issues.</p>
+          <div className="flex gap-3 justify-center">
+            <a className="px-4 py-2 bg-blue-600 text-white rounded" href={`mailto:admin@automationx.com?subject=Account%20Blocked%20(${encodeURIComponent(fid)})`}>Contact Administrator</a>
+            <button onClick={() => { navigator.clipboard?.writeText(fid); showToast('Firebase ID copied to clipboard'); }} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 rounded">Copy ID</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const renderGeneralIndex = () => (
     <div className="pb-24">
       <div className={`p-6 border-b-4 border-double sticky top-0 z-10 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-yellow-100 border-yellow-400'}`}>
@@ -2604,4 +2627,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-  }
+      }
