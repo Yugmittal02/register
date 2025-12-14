@@ -2,14 +2,14 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { 
   Plus, Minus, Search, X, Trash2, ArrowLeft, Book, Grid, 
   Mic, Settings, AlertTriangle, Languages, Lock, Bell, 
-  Download, ShieldCheck, ShieldAlert, CheckCircle, Smartphone, 
+  Download, ShieldCheck, ShieldAlert, CheckCircle, 
   Edit, SaveAll, LogOut, Wifi, WifiOff, User, Loader2, ChevronRight,
   ChevronUp, ChevronDown, ArrowRight, 
   ArrowRight as ArrowRightIcon, 
   ArrowLeft as ArrowLeftIcon,
   Copy, Layers, Ban, Store, Zap, XCircle, AlertCircle,
   FileText, HelpCircle, Phone, MessageSquare, ExternalLink, Shield,
-  Calculator, Percent, CreditCard, StickyNote, Briefcase, Camera, Image as ImageIcon,
+  Calculator, Percent, CreditCard, StickyNote, Briefcase, Image as ImageIcon,
   Share2, Calendar, MoreVertical, History, RefreshCcw, DollarSign,
   Pin, PinOff, PenTool, Highlighter, Circle as CircleIcon, Eraser, Type,
   RefreshCw, RotateCcw, Printer, FilePlus, Send,
@@ -18,7 +18,7 @@ import {
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -26,7 +26,7 @@ import {
   signOut,
   onAuthStateChanged 
 } from "firebase/auth";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 
 // ---------------------------------------------------------
 // ✅ CONFIGURATION
@@ -47,20 +47,205 @@ const auth = getAuth(app);
 const storage = getStorage(app);
 
 // Fix for Multi-Tab Persistence Error
-try {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-        console.warn("Persistence failed: Multiple tabs open. Proceeding without persistence in this tab.");
-    } else if (err.code === 'unimplemented') {
-        console.warn("Persistence is not supported by this browser.");
+// Attempt to enable multi-tab IndexedDB persistence first (preferred for shared access).
+// Persistence owner coordination to avoid multiple tabs enabling persistence concurrently
+// and causing Firestore INTERNAL ASSERTION errors about exclusive access.
+(function () {
+  const DISABLED_KEY = 'dukan:firestore-persistence-disabled';
+  const OWNER_KEY = 'dukan:firestore-persistence-owner';
+  const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+  const HEARTBEAT_MS = 5000;
+  const FIRESTORE_ERROR_KEY = 'dukan:firestore-persistence-error';
+  const FIRESTORE_ERROR_PATTERNS = [
+    'Failed to obtain exclusive access to the persistence layer',
+    'Failed to obtain primary lease',
+    'INTERNAL ASSERTION FAILED'
+  ];
+  const SUPPRESS_DURATION_MS = 60_000;
+
+  if (localStorage.getItem(DISABLED_KEY) === '1') {
+    console.info('Skipping Firestore persistence (previously disabled)');
+    return;
+  }
+
+  let heartbeatTimer = null;
+  let suppressionActive = false;
+  const setOwner = () => {
+    try {
+      localStorage.setItem(OWNER_KEY, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+    } catch {
+      /* noop */
+    }
+  };
+  const clearOwner = () => {
+    try {
+      const raw = localStorage.getItem(OWNER_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id === TAB_ID) localStorage.removeItem(OWNER_KEY);
+    } catch { /* noop */ }
+  };
+
+  const tryEnable = async () => {
+    try {
+      // Quick check: if another owner exists and is recent, don't attempt to become owner.
+      const raw = localStorage.getItem(OWNER_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && (Date.now() - parsed.ts) < HEARTBEAT_MS * 2) {
+            console.info('Another tab appears to own persistence; skipping enable');
+            return;
+          }
+        } catch { /* fall through */ }
+      }
+
+      // Become owner and attempt to enable multi-tab persistence
+      setOwner();
+      if (typeof enableMultiTabIndexedDbPersistence === 'function') {
+        await enableMultiTabIndexedDbPersistence(db);
+        console.info('Firestore multi-tab persistence enabled by owner', TAB_ID);
+      } else {
+        // Some SDKs support enableIndexedDbPersistence with synchronizeTabs flag
+        try {
+          await enableIndexedDbPersistence(db, { synchronizeTabs: true });
+          console.info('Firestore persistence with synchronizeTabs enabled by owner', TAB_ID);
+        } catch (inner) {
+          console.warn('synchronizeTabs attempt failed', inner);
+          try {
+            await enableIndexedDbPersistence(db);
+            console.info('Firestore single-tab persistence enabled by owner', TAB_ID);
+          } catch (err2) {
+            if (err2 && err2.code === 'failed-precondition') {
+              console.warn('Persistence unavailable: another tab has exclusive access. Disabling persistence attempts.');
+              localStorage.setItem(DISABLED_KEY, '1');
+              clearOwner();
+            } else if (err2 && err2.code === 'unimplemented') {
+              console.warn('Persistence is not supported by this browser.');
+              localStorage.setItem(DISABLED_KEY, '1');
+              clearOwner();
+            } else {
+              console.warn('Unexpected error enabling IndexedDB persistence', err2);
+              clearOwner();
+            }
+          }
+        }
+      }
+
+      // If we got here and persistence seems enabled, keep a heartbeat to show liveness
+      heartbeatTimer = setInterval(() => {
+        setOwner();
+      }, HEARTBEAT_MS);
+
+      // Remove owner on unload
+      window.addEventListener('beforeunload', () => {
+        clearOwner();
+      });
+    } catch (err) {
+      // If we see repeated SDK assertion failures, mark persistence disabled
+      console.warn('Unexpected error while attempting to enable persistence', err);
+      localStorage.setItem(DISABLED_KEY, '1');
+      localStorage.setItem(FIRESTORE_ERROR_KEY, JSON.stringify({ ts: Date.now(), msg: String(err && err.message ? err.message : err) }));
+      clearOwner();
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      // Activate short-term suppression of matching console messages
+      suppressionActive = true;
+      wrapConsoleSuppression();
+    }
+  };
+
+  const handleFirestoreError = (message) => {
+    if (suppressionActive) return;
+    if (!message) return;
+    if (!FIRESTORE_ERROR_PATTERNS.some(p => message.includes(p))) return;
+    try {
+      console.warn('Detected Firestore persistence contention, disabling further attempts');
+      localStorage.setItem(DISABLED_KEY, '1');
+      localStorage.setItem(FIRESTORE_ERROR_KEY, JSON.stringify({ ts: Date.now(), msg: message }));
+      clearOwner();
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      suppressionActive = true;
+      wrapConsoleSuppression();
+    } catch {
+      /* noop */
+    }
+  };
+
+  const wrapConsoleSuppression = () => {
+    const origWarn = console.warn.bind(console);
+    const origError = console.error.bind(console);
+    console.warn = (...args) => {
+      if (args.some(a => typeof a === 'string' && FIRESTORE_ERROR_PATTERNS.some(p => a.includes(p)))) return;
+      origWarn(...args);
+    };
+    console.error = (...args) => {
+      if (args.some(a => typeof a === 'string' && FIRESTORE_ERROR_PATTERNS.some(p => a.includes(p)))) return;
+      origError(...args);
+    };
+    setTimeout(() => {
+      console.warn = origWarn;
+      console.error = origError;
+      suppressionActive = false;
+    }, SUPPRESS_DURATION_MS);
+  };
+
+  // React to storage events so that if a new owner appears we back off
+  window.addEventListener('storage', (ev) => {
+    if (ev.key === OWNER_KEY && ev.newValue) {
+      try {
+        const parsed = JSON.parse(ev.newValue);
+        if (parsed && parsed.id !== TAB_ID) {
+          // Another tab became owner; stop our heartbeat
+          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+        }
+      } catch { /* noop */ }
+    }
+    if (ev.key === FIRESTORE_ERROR_KEY && ev.newValue) {
+      // If another tab reports an error, also activate local suppression and mark disabled
+      try { const parsed = JSON.parse(ev.newValue); handleFirestoreError(parsed.msg || String(ev.newValue)); } catch { handleFirestoreError(String(ev.newValue)); }
     }
   });
-} catch(e) { 
-  console.log("Persistence fallback active"); 
-}
+
+  // Also listen to global errors/unhandled rejections so we can react quickly
+  const globalErrorHandler = (ev) => {
+    try {
+      const msg = ev && (ev.reason?.message || ev.message || String(ev));
+      handleFirestoreError(msg);
+      if (msg && msg.includes('Invalid hook call')) {
+        // Log diagnostics for invalid hook call to help debugging
+        try {
+          console.error('Invalid hook call detected. Diagnostics:', {
+            reactVersion: React && React.version,
+            reactDomVersion: (window && window.ReactDOM && window.ReactDOM.version) || null,
+            dukanTabDiagnostics: window.__dukan_dumpDiagnostics ? window.__dukan_dumpDiagnostics() : null,
+            location: window.location.href
+          });
+        } catch { /* noop */ }
+        try { localStorage.setItem('dukan:invalid-hook', JSON.stringify({ ts: Date.now(), msg })); } catch { /* noop */ }
+      }
+    } catch { /* noop */ }
+  };
+  window.addEventListener('unhandledrejection', globalErrorHandler);
+  window.addEventListener('error', (ev) => { globalErrorHandler(ev); });
+
+  // Start attempt after small delay to allow other tabs to set up first
+  setTimeout(tryEnable, 400);
+  // Expose lightweight diagnostics to make runtime debugging easier
+  try { window.__dukan_tabId = TAB_ID; } catch { /* noop */ }
+  try {
+    window.__dukan_dumpDiagnostics = () => ({
+      tabId: TAB_ID,
+      owner: localStorage.getItem(OWNER_KEY),
+      disabled: localStorage.getItem(DISABLED_KEY),
+      lastError: localStorage.getItem(FIRESTORE_ERROR_KEY),
+      pendingDeletes: localStorage.getItem('dukan:pendingDeletes')
+    });
+  } catch { /* noop */ }
+})();
 
 // ---------------------------------------------------------
 // 🧠 TRANSLATION ENGINE
+    // Delete a bill (remove from storage if present and update cloud)
 // ---------------------------------------------------------
 const translationCache = new Map(); 
 
@@ -94,7 +279,7 @@ const exactDictionary = {
   "privacy policy": "गोपनीयता नीति", "legal": "कानूनी", "support": "सहायता", "faq": "अक्सर पूछे जाने वाले सवाल", "feedback": "सुझाव / संपर्क",
   "app info": "ऐप की जानकारी", "secured by": "सुरक्षित", "parent company": "मूल कंपनी", "load more": "और देखें", "showing": "दिख रहे हैं", "of": "में से",
   "tools": "टूल्स", "business tools": "बिज़नेस टूल्स", "gst calc": "GST कैलकुलेटर", "margin": "मार्जिन", "converter": "कन्वर्टर", "visiting card": "विजिटिंग कार्ड", "quick notes": "नोट्स",
-  "bills": "बिल्स", "my bills": "मेरे बिल", "upload bill": "बिल जोड़ें", "camera": "कैमरा", "delete bill": "बिल हटाएं",
+  "bills": "बिल्स", "upload bill": "बिल जोड़ें", "delete bill": "बिल हटाएं",
   "translator": "अनुवादक", "type here": "यहाँ लिखें", "translate": "अनुवाद करें", "invoice": "बिल जनरेटर"
 };
 
@@ -113,41 +298,30 @@ const convertToHindi = (text) => {
   if (!text) return "";
   const strText = text.toString();
   if (translationCache.has(strText)) return translationCache.get(strText);
-
   try {
-    const lowerText = strText.toLowerCase().trim();
-    if (exactDictionary[lowerText]) {
-        translationCache.set(strText, exactDictionary[lowerText]);
-        return exactDictionary[lowerText];
-    }
+    const translated = strText.split(/\s+/).map((word) => {
+      const lower = word.toLowerCase();
+      if (exactDictionary[lower]) return exactDictionary[lower];
 
-    const translated = strText.split(' ').map(word => {
-      const cleanWord = word.replace(/[^a-zA-Z0-9]/g, ""); 
-      if (!cleanWord) return word; 
-
-      const lowerWord = cleanWord.toLowerCase();
-      if (exactDictionary[lowerWord]) return exactDictionary[lowerWord];
-      if (!isNaN(cleanWord)) return word;
-
-      let hindiWord = "";
       let i = 0;
-      while (i < cleanWord.length) {
-        const char = lowerWord[i];
-        const next = lowerWord[i+1] || "";
+      let hindiWord = '';
+      while (i < lower.length) {
+        const char = lower[i];
+        const next = lower[i + 1] || '';
         const double = char + next;
 
-        if (soundMap[double] && !['a','e','i','o','u'].includes(char)) {
+        if (soundMap[double] && !['a', 'e', 'i', 'o', 'u'].includes(char)) {
           hindiWord += soundMap[double];
           i += 2;
         } else if (soundMap[char]) {
-          if (i === 0 && ['a','e','i','o','u'].includes(char)) {
-             if(char === 'a') hindiWord += 'अ';
-             else if(char === 'e') hindiWord += 'ए';
-             else if(char === 'i') hindiWord += 'इ';
-             else if(char === 'o') hindiWord += 'ओ';
-             else if(char === 'u') hindiWord += 'उ';
+          if (i === 0 && ['a', 'e', 'i', 'o', 'u'].includes(char)) {
+            if (char === 'a') hindiWord += 'अ';
+            else if (char === 'e') hindiWord += 'ए';
+            else if (char === 'i') hindiWord += 'इ';
+            else if (char === 'o') hindiWord += 'ओ';
+            else if (char === 'u') hindiWord += 'उ';
           } else {
-             hindiWord += soundMap[char];
+            hindiWord += soundMap[char];
           }
           i++;
         } else {
@@ -157,12 +331,12 @@ const convertToHindi = (text) => {
       }
       return hindiWord || word;
     }).join(' ');
-      
+
     translationCache.set(strText, translated);
     return translated;
-
   } catch (err) {
-    return text; 
+    console.error(err);
+    return strText;
   }
 };
 
@@ -173,7 +347,7 @@ class ErrorBoundary extends React.Component {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
   componentDidCatch(error, errorInfo) {
@@ -215,6 +389,7 @@ const ToastMessage = ({ message, type, onClose }) => {
 // 🛠️ TOOLS COMPONENT (UPGRADED)
 const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onTogglePin, shopDetails }) => {
   const [activeTool, setActiveTool] = useState(initialTool);
+  const [invoiceNumber] = useState(() => Date.now().toString().slice(-4));
   const [gstInput, setGstInput] = useState({ price: '', rate: 18, isReverse: false });
   const [marginInput, setMarginInput] = useState({ cost: '', sell: '', discount: 0, mode: 'profit' });
   const [convInput, setConvInput] = useState({ val: '', type: 'kgToTon' });
@@ -231,7 +406,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
       try {
         const saved = localStorage.getItem('proNotes');
         return saved ? JSON.parse(saved) : [];
-      } catch(e) { return []; }
+      } catch(e) { console.error(e); return []; }
   });
   const [currentNote, setCurrentNote] = useState({ id: null, title: '', body: '', date: '', sketch: null });
   const [noteSearch, setNoteSearch] = useState('');
@@ -297,10 +472,11 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                             text: `Invoice from ${shopDetails.shopName}`
                         });
                     } catch (err) {
-                         const link = document.createElement('a');
-                        link.href = canvas.toDataURL();
-                        link.download = `Invoice_${Date.now()}.png`;
-                        link.click();
+                     console.warn('Share API failed, falling back to download', err);
+                     const link = document.createElement('a');
+                     link.href = canvas.toDataURL();
+                     link.download = `Invoice_${Date.now()}.png`;
+                     link.click();
                     }
                 } else {
                     const link = document.createElement('a');
@@ -464,7 +640,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                             <p>{invCust.phone}</p>
                         </div>
                         <div className="text-right">
-                            <p>#{Date.now().toString().slice(-4)}</p>
+                            <p>#{invoiceNumber}</p>
                             <p>{new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
@@ -475,18 +651,20 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                                 <th className="py-1">Item</th>
                                 <th className="py-1 text-center">Qty</th>
                                 <th className="py-1 text-right">Price</th>
-                                <th className="py-1 text-right">Total</th>
+                            <th className="py-1 text-right">Total</th>
+                            <th className="py-1 text-right">&nbsp;</th>
                             </tr>
                         </thead>
                         <tbody className="text-[10px]">
-                            {invItems.map((item, idx) => (
-                                <tr key={item.id} className="border-b border-gray-100">
-                                    <td className="py-1">{item.name}</td>
-                                    <td className="py-1 text-center">{item.qty}</td>
-                                    <td className="py-1 text-right">{item.rate}</td>
-                                    <td className="py-1 text-right">{(item.total).toFixed(0)}</td>
-                                </tr>
-                            ))}
+                          {invItems.map(item => (
+                            <tr key={item.id} className="border-b border-gray-100">
+                              <td className="py-1">{item.name}</td>
+                              <td className="py-1 text-center">{item.qty}</td>
+                              <td className="py-1 text-right">{item.rate}</td>
+                              <td className="py-1 text-right">{(item.total).toFixed(0)}</td>
+                              <td className="py-1 text-right"><button onClick={() => deleteInvItem(item.id)} className="text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={14}/></button></td>
+                            </tr>
+                          ))}
                         </tbody>
                     </table>
                     
@@ -546,19 +724,19 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                 <button onClick={() => {navigator.clipboard.writeText(convertToHindi(transInput)); alert("Copied!")}} className="mt-4 w-full py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2"><Copy size={18}/> Copy Hindi Text</button>
             </div>
         );
-      case 'gst':
-         const price = parseFloat(gstInput.price) || 0;
-         let gstAmt = 0, finalAmt = 0, baseAmt = 0;
-         if(gstInput.isReverse) {
-            baseAmt = (price * 100) / (100 + gstInput.rate);
-            gstAmt = price - baseAmt;
-            finalAmt = price;
-         } else {
-            baseAmt = price;
-            gstAmt = (price * gstInput.rate) / 100;
-            finalAmt = price + gstAmt;
-         }
-         return (
+      case 'gst': {
+        const price = parseFloat(gstInput.price) || 0;
+        let gstAmt = 0, finalAmt = 0, baseAmt = 0;
+        if(gstInput.isReverse) {
+          baseAmt = (price * 100) / (100 + gstInput.rate);
+          gstAmt = price - baseAmt;
+          finalAmt = price;
+        } else {
+          baseAmt = price;
+          gstAmt = (price * gstInput.rate) / 100;
+          finalAmt = price + gstAmt;
+        }
+        return (
            <div className={cardClass}>
              <div className="flex justify-between items-center mb-4">
                  <h3 className="font-bold text-xl">GST Calculator</h3>
@@ -579,7 +757,8 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
              </div>
              <button onClick={() => navigator.clipboard.writeText(`Base: ${baseAmt.toFixed(2)}\nGST: ${gstAmt.toFixed(2)}\nTotal: ${finalAmt.toFixed(2)}`)} className="w-full py-3 bg-gray-200 rounded-xl font-bold text-gray-700 flex items-center justify-center gap-2"><Copy size={16}/> Copy Result</button>
            </div>
-         );
+           );
+          }
       case 'margin':
          return (
            <div className={cardClass}>
@@ -620,15 +799,15 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                )}
            </div>
          );
-      case 'converter':
-         const val = parseFloat(convInput.val) || 0;
-         let res = 0;
-         let unit = '';
-         if(convInput.type === 'kgToTon') { res = val / 1000; unit = 'Tons'; }
-         else if(convInput.type === 'tonToKg') { res = val * 1000; unit = 'KG'; }
-         else if(convInput.type === 'oil') { res = val * 0.91; unit = 'KG (approx)'; } 
-         else if(convInput.type === 'feetToM') { res = val * 0.3048; unit = 'Meters'; }
-         return (
+      case 'converter': {
+        const val = parseFloat(convInput.val) || 0;
+        let res = 0;
+        let unit = '';
+        if(convInput.type === 'kgToTon') { res = val / 1000; unit = 'Tons'; }
+        else if(convInput.type === 'tonToKg') { res = val * 1000; unit = 'KG'; }
+        else if(convInput.type === 'oil') { res = val * 0.91; unit = 'KG (approx)'; } 
+        else if(convInput.type === 'feetToM') { res = val * 0.3048; unit = 'Meters'; }
+        return (
            <div className={cardClass}>
              <h3 className="font-bold mb-4 text-xl">Pro Converter</h3>
              <select className={commonInputClass} value={convInput.type} onChange={e => setConvInput({...convInput, type: e.target.value})}>
@@ -643,6 +822,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
              </div>
            </div>
          );
+        }
       case 'card':
          return (
            <div className={cardClass}>
@@ -899,33 +1079,46 @@ const VoiceInput = ({ onResult, isDark }) => {
 
 // 🖼️ FULL SCREEN IMAGE MODAL
 const ImageModal = ({ src, onClose, onDelete }) => {
+    const [zoom, setZoom] = useState(false);
     if (!src) return null;
     return (
-        <div className="fixed inset-0 bg-black z-[120] flex flex-col justify-center items-center">
+        <div className="fixed inset-0 bg-black z-[120] flex flex-col justify-center items-center p-4">
             <button onClick={onClose} className="absolute top-4 right-4 text-white bg-white/20 p-3 rounded-full"><X/></button>
-            <img src={src} className="max-w-full max-h-[80vh] object-contain" />
-            <button onClick={onDelete} className="mt-8 bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex gap-2"><Trash2/> Delete Photo</button>
+            <div className={`overflow-auto ${zoom ? 'cursor-zoom-out' : 'cursor-zoom-in'} w-full h-full flex items-center justify-center`} onClick={() => setZoom(z => !z)}>
+                <img src={src} className={`object-contain transition-transform duration-150 ${zoom ? 'scale-125 max-w-none max-h-none' : 'max-w-full max-h-[80vh]'}`} alt="Bill" />
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button onClick={onDelete} className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold flex gap-2"><Trash2/> Delete Photo</button>
+              <button onClick={() => setZoom(z => !z)} className="bg-white text-black px-4 py-2 rounded">{zoom ? 'Exit Zoom' : 'Zoom'}</button>
+            </div>
         </div>
     );
 };
 
-const NavBtn = ({ icon: Icon, label, active, onClick, alert, isDark }) => (
+
+const NavBtn = ({ icon, label, active, onClick, alert }) => (
   <button onClick={onClick} className={`relative flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${active ? 'text-blue-600 bg-blue-50 dark:bg-slate-800 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
-    <Icon size={24} strokeWidth={active ? 2.5 : 2} />
+    {icon && React.createElement(icon, { size: 24, strokeWidth: active ? 2.5 : 2 })}
     <span className="text-[10px] font-bold mt-1 text-center leading-none">{label}</span>
     {alert && <span className="absolute top-1 right-3 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-bounce"></span>}
   </button>
 );
 
 
+const defaultData = { 
+  pages: [], 
+  entries: [], 
+  bills: [], 
+  settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Dukan Register', pinnedTools: [] },
+  appStatus: 'active'
+};
+
+
 function DukanRegister() {
-  const defaultData = { 
-    pages: [], 
-    entries: [], 
-    bills: [], 
-    settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Dukan Register', pinnedTools: [] },
-    appStatus: 'active'
-  };
+  useEffect(() => {
+    console.info('DukanRegister mounted', { tabId: window.__dukan_tabId, time: Date.now() });
+    return () => console.info('DukanRegister unmounted', { tabId: window.__dukan_tabId, time: Date.now() });
+  }, []);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -940,6 +1133,29 @@ function DukanRegister() {
   const [view, setView] = useState('generalIndex'); 
   const [activePageId, setActivePageId] = useState(null);
   const [activeToolId, setActiveToolId] = useState(null);
+
+  // Upload concurrency control to avoid heavy CPU/network bursts
+  const uploadConcurrency = useRef(0);
+  const uploadQueue = useRef([]);
+  const MAX_CONCURRENT_UPLOADS = 3;
+  const scheduleUpload = useCallback((fn) => {
+    if (uploadConcurrency.current < MAX_CONCURRENT_UPLOADS) {
+      uploadConcurrency.current += 1;
+      (async () => {
+        try { await fn(); } catch (err) { console.warn('Scheduled upload failed', err); }
+        finally {
+          uploadConcurrency.current -= 1;
+          if (uploadQueue.current.length) {
+            const next = uploadQueue.current.shift();
+            scheduleUpload(next);
+          }
+        }
+      })();
+    } else {
+      uploadQueue.current.push(fn);
+    }
+  }, []);
+
   
   const [pageSearchTerm, setPageSearchTerm] = useState(''); 
   const [indexSearchTerm, setIndexSearchTerm] = useState(''); 
@@ -990,9 +1206,14 @@ function DukanRegister() {
     return convertToHindi(text);
   }, [isHindi]);
 
-  const showToast = (message, type = 'success') => {
+  // Keep a ref to `data` so snapshot handler can merge transient local state without triggering
+  // extra effect dependencies (avoids re-subscribing to Firestore on every local state change).
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+    const showToast = useCallback((message, type = 'success') => {
       setToast({ message, type });
-  };
+    }, [setToast]);
 
   useEffect(() => {
       setDisplayLimit(50);
@@ -1031,24 +1252,46 @@ function DukanRegister() {
     window.addEventListener('offline', () => setIsOnline(false));
 
     const unsubDb = onSnapshot(doc(db, "appData", user.uid), (docSnapshot) => {
-        if (docSnapshot.exists()) {
-            const cloudData = docSnapshot.data();
-            if(!cloudData.settings) cloudData.settings = defaultData.settings;
-            if(!cloudData.settings.pinnedTools) cloudData.settings.pinnedTools = []; 
-            if(!cloudData.settings.shopName) cloudData.settings.shopName = 'Dukan Register';
-            if(!cloudData.appStatus) cloudData.appStatus = 'active';
+      if (docSnapshot.exists()) {
+        const cloudData = docSnapshot.data();
+        if(!cloudData.settings) cloudData.settings = defaultData.settings;
+        if(!cloudData.settings.pinnedTools) cloudData.settings.pinnedTools = []; 
+        if(!cloudData.settings.shopName) cloudData.settings.shopName = 'Dukan Register';
+        if(!cloudData.appStatus) cloudData.appStatus = 'active';
             
-            if(!Array.isArray(cloudData.pages)) cloudData.pages = [];
-            if(!Array.isArray(cloudData.entries)) cloudData.entries = [];
-            if(!Array.isArray(cloudData.bills)) cloudData.bills = []; 
-            if(!cloudData.settings.productPassword) cloudData.settings.productPassword = '0000';
-            
-            if(cloudData.settings.limit) setTempLimit(cloudData.settings.limit);
-            
-            setData(cloudData);
-        } else {
-            setDoc(doc(db, "appData", user.uid), defaultData);
-        }
+        if(!Array.isArray(cloudData.pages)) cloudData.pages = [];
+        if(!Array.isArray(cloudData.entries)) cloudData.entries = [];
+        if(!Array.isArray(cloudData.bills)) cloudData.bills = []; 
+        if(!cloudData.settings.productPassword) cloudData.settings.productPassword = '0000';
+
+        if(cloudData.settings.limit) setTempLimit(cloudData.settings.limit);
+
+        // Merge transient local state (previewUrl, uploading/progress/tempBlob, uploadFailed)
+        const localBills = (dataRef.current && dataRef.current.bills) ? dataRef.current.bills : [];
+        const localMap = new Map(localBills.map(b => [b.id, b]));
+
+        const mergedBills = (cloudData.bills || []).map(cb => {
+          const local = localMap.get(cb.id);
+          if (!local) return cb;
+          return { ...cb,
+            previewUrl: local.previewUrl || local.image || null,
+            uploading: local.uploading || false,
+            progress: typeof local.progress === 'number' ? local.progress : 0,
+            tempBlob: local.tempBlob,
+            uploadFailed: local.uploadFailed || false
+          };
+        });
+
+        // Include any local-only bills (not yet in cloud) at the front so they remain visible
+        const cloudIds = new Set((cloudData.bills || []).map(b => b.id));
+        const localOnly = localBills.filter(b => !cloudIds.has(b.id));
+
+        const finalData = { ...cloudData, bills: [...localOnly, ...mergedBills] };
+
+        setData(finalData);
+      } else {
+        setDoc(doc(db, "appData", user.uid), defaultData);
+      }
         setDbLoading(false);
     }, (error) => console.error("DB Error:", error));
     return () => unsubDb();
@@ -1076,10 +1319,99 @@ function DukanRegister() {
   };
 
   const pushToFirebase = async (newData) => {
-      if(!user) return;
-      try { await setDoc(doc(db, "appData", user.uid), newData); return true; } 
-      catch (e) { showToast("Save Failed: " + e.message, "error"); return false; }
+      if(!user) return false;
+
+      // Try to write immediately with retries; fall back to queued local writes on persistent failure
+      const trySet = async (attempts = 3) => {
+        for (let i = 1; i <= attempts; i++) {
+          try {
+            await setDoc(doc(db, "appData", user.uid), newData);
+            return true;
+          } catch (err) {
+            // If offline or persistence disabled, break and queue
+            const msg = String(err && err.message ? err.message : err);
+            console.warn(`pushToFirebase attempt ${i} failed:`, msg);
+            if (i === attempts) throw err;
+            await new Promise(res => setTimeout(res, 300 * i));
+          }
+        }
+        return false;
+      };
+
+      try {
+        const res = await trySet(3);
+        return res;
+      } catch (err) {
+        // Queue for later sync
+        try {
+          const key = 'dukan:pendingWrites';
+          const raw = localStorage.getItem(key);
+          const list = raw ? JSON.parse(raw) : [];
+          list.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2,8), data: newData, ts: Date.now(), attempts: 0 });
+          localStorage.setItem(key, JSON.stringify(list));
+          showToast(t('Saved locally. Will retry sync.'), 'error');
+        } catch (e) {
+          console.error('Failed to queue write', e);
+          showToast(t('Save Failed: ') + (err && err.message ? err.message : String(err)), 'error');
+        }
+        return false;
+      }
   };
+
+  // Process pending writes persisted in localStorage
+  const processPendingWrites = useCallback(async () => {
+    if (!user) return;
+    try {
+      const key = 'dukan:pendingWrites';
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const list = JSON.parse(raw) || [];
+      const remaining = [];
+      for (const item of list) {
+        try {
+          await setDoc(doc(db, 'appData', user.uid), item.data);
+        } catch {
+          const attempts = (item.attempts || 0) + 1;
+          if (attempts >= 5) {
+            console.warn('Dropping pending write after max attempts', item.id);
+            continue;
+          }
+          remaining.push({ ...item, attempts });
+        }
+      }
+      if (remaining.length) localStorage.setItem(key, JSON.stringify(remaining)); else localStorage.removeItem(key);
+    } catch (e) {
+      console.warn('Error processing pending writes', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // Try to sync pending writes when online or when user signs in
+    processPendingWrites();
+    window.addEventListener('online', processPendingWrites);
+    return () => window.removeEventListener('online', processPendingWrites);
+  }, [processPendingWrites]);
+
+  // Periodic local backup and an export helper to avoid data loss
+  useEffect(() => {
+    const id = setInterval(() => {
+      try { localStorage.setItem('dukan:backup', JSON.stringify(data)); } catch (e) { console.warn('Backup failed', e); }
+    }, 1000 * 60 * 5); // every 5 minutes
+    return () => clearInterval(id);
+  }, [data]);
+
+  const exportDataToFile = () => {
+    try {
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `dukan-backup-${Date.now()}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast(t('Backup exported'));
+    } catch (e) { console.warn('Export failed', e); showToast(t('Backup failed'), 'error'); }
+  };
+  try { window.__dukan_exportData = exportDataToFile; } catch { /* noop */ }
 
   const handleTogglePin = async (toolId) => {
       const currentPins = data.settings.pinnedTools || [];
@@ -1095,89 +1427,257 @@ function DukanRegister() {
   };
 
   const compressImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200; 
-          const scaleSize = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scaleSize;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
-          canvas.toBlob((blob) => {
-              resolve(blob);
-          }, 'image/jpeg', 0.7);
-        };
-      };
-    });
+    // Faster compression: use createImageBitmap + binary search on quality, then downscale if needed.
+    // Target is <= 100KB for instant add UX.
+    return (async () => {
+      const TARGET_MIN = 20 * 1024; // allow lower floor if necessary
+      const TARGET_MAX = 100 * 1024; // target <= 100KB
+      const MAX_WIDTH = 900; // reduce max width for faster, smaller images
+      const MIN_WIDTH = 320; // lower bound
+
+        const imgBitmap = await createImageBitmap(file);
+        let width = Math.min(MAX_WIDTH, imgBitmap.width);
+        let height = Math.round((imgBitmap.height * width) / imgBitmap.width);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const blobAtQuality = (q) => new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', q));
+
+        let bestBlob = null;
+
+        while (true) {
+          canvas.width = width;
+          canvas.height = height;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
+
+            // Quick direct attempt at reasonable quality first
+            const quick = await blobAtQuality(0.75);
+            if (quick && quick.size <= TARGET_MAX) return quick;
+
+            // Binary search over quality to reduce iterations
+            let low = 0.35, high = 0.85, candidate = null;
+            for (let i = 0; i < 5; i++) {
+            const mid = (low + high) / 2;
+            const blob = await blobAtQuality(mid);
+            if (!blob) break;
+            const size = blob.size;
+            candidate = blob;
+            if (size > TARGET_MAX) {
+              high = mid;
+            } else if (size < TARGET_MIN) {
+              low = mid;
+            } else {
+              return blob; // within target
+            }
+          }
+
+          if (candidate) {
+            if (!bestBlob) bestBlob = candidate;
+            else if (Math.abs(bestBlob.size - TARGET_MAX) > Math.abs(candidate.size - TARGET_MAX)) bestBlob = candidate;
+          }
+
+          if (width <= MIN_WIDTH) break;
+          width = Math.max(MIN_WIDTH, Math.round(width * 0.8));
+          height = Math.round((imgBitmap.height * width) / imgBitmap.width);
+        }
+
+        if (bestBlob) return bestBlob;
+
+        // final fallback
+        canvas.width = Math.min(MAX_WIDTH, imgBitmap.width);
+        canvas.height = Math.round((imgBitmap.height * canvas.width) / imgBitmap.width);
+        ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
+        return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('Compression failed')), 'image/jpeg', 0.75));
+    })();
   };
+  /* eslint-disable-next-line no-unused-vars */
   const handleBillUpload = async (e) => {
     if(data.bills.length >= 50) return alert("Storage Limit Reached (Max 50 Photos)");
     const file = e.target.files[0];
     if(!file) return;
-    
-    showToast("Processing & Uploading...");
-    
-    try {
-        const compressedBlob = await compressImage(file);
-        const timestamp = Date.now();
-        const storagePath = `bills/${user.uid}/${timestamp}.jpg`;
-        const storageRef = ref(storage, storagePath);
-        
-        await uploadBytes(storageRef, compressedBlob);
-        const downloadUrl = await getDownloadURL(storageRef);
 
-        const newBill = {
-            id: timestamp,
-            date: new Date().toISOString(),
-            image: downloadUrl, // Cloud URL
-            path: storagePath 
-        };
-        
-        // --- 🟢 FIX IS HERE: Pehle local state update karein, fir server par bhejein ---
-        const newData = { ...data, bills: [newBill, ...(data.bills || [])] };
-        
-        setData(newData); // <--- YE LINE MISSING THI (Ab photo turant dikhegi)
-        
-        await pushToFirebase(newData);
-        showToast("Bill Saved!");
-    } catch (err) {
-        showToast("Upload Failed", "error");
-        console.error(err);
+    if (!file.type || !file.type.startsWith('image/')) {
+      showToast(t('Only image files are supported'), 'error');
+      return;
     }
-  };
 
-  const handleDeleteBill = async (bill) => {
-      if(!bill) return;
-      triggerConfirm("Delete Photo?", "This will delete from cloud storage.", true, async () => {
+    // Create a local preview so the user sees the photo immediately
+    const previewUrl = URL.createObjectURL(file);
+    const timestamp = Date.now();
+    const storagePath = user ? `bills/${user.uid}/${timestamp}.jpg` : null;
+    const tempBill = {
+      id: timestamp,
+      date: new Date().toISOString(),
+      image: previewUrl, // local preview
+      path: storagePath,
+      uploading: true,
+      progress: 0,
+      originalFile: file
+    };
+
+    // Server-visible bill (no object URLs) so it's persisted safely
+    const serverBill = {
+      id: timestamp,
+      date: new Date().toISOString(),
+      image: null, // will be set to downloadURL after upload
+      path: storagePath,
+      uploading: true,
+      progress: 0
+    };
+
+    // Optimistically update UI
+    setData(prev => {
+      const next = { ...prev, bills: [tempBill, ...(prev.bills || [])] };
+      // Persist a server-friendly bill (without object URL) so it remains after refresh
+      if (user) {
+        const cloudNext = { ...prev, bills: [serverBill, ...(prev.bills || [])] };
+        pushToFirebase(cloudNext).catch(e => console.error('Initial bill save failed', e));
+      } else {
+        showToast('Saved locally. Sign in to persist to cloud.');
+      }
+      return next;
+    });
+    showToast("Processing & Uploading...");
+
+    // Use resumable upload below to track progress and allow retries
+    try {
+      if (!storagePath) {
+        // No authenticated user to own the upload path
+        setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, uploading: false, uploadFailed: true } : b) }));
+        showToast('Sign in to upload bills', 'error');
+        return;
+      }
+
+      // Schedule the heavy work to avoid overloading CPU/network when many images selected
+      scheduleUpload(async () => {
         try {
-            if(bill.path) {
-                const storageRef = ref(storage, bill.path);
-                await deleteObject(storageRef).catch(e => console.warn("Storage delete error", e));
-            }
-            const newData = { ...data, bills: data.bills.filter(b => b.id !== bill.id) };
-            await pushToFirebase(newData);
-            setViewImage(null);
-            showToast("Bill Deleted");
-        } catch(e) {
-            showToast("Error deleting", "error");
+          const compressedBlob = await compressImage(file);
+          console.log('Compressed blob size:', compressedBlob.size);
+          const storageRef = ref(storage, storagePath);
+
+          // Use resumable upload to track progress
+          const uploadTask = uploadBytesResumable(storageRef, compressedBlob);
+
+          // Attach temp bill with compressed blob for potential retry
+          setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, tempBlob: compressedBlob } : b) }));
+
+          uploadTask.on('state_changed', (snapshot) => {
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, progress } : b) }));
+          }, (error) => {
+            console.error('Upload failed', error);
+            setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, uploading: false, uploadFailed: true } : b) }));
+            showToast('Upload Failed', 'error');
+          }, async () => {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            const updated = { ...data, bills: (data.bills || []).map(b => b.id === timestamp ? { id: timestamp, date: new Date().toISOString(), image: downloadUrl, path: storagePath } : b) };
+            await pushToFirebase(updated);
+            setData(updated);
+            try { URL.revokeObjectURL(previewUrl); } catch(e) { console.warn('Revoke failed', e); }
+            showToast('Bill Saved!');
+          });
+        } catch (err) {
+          console.error('Scheduled upload failed', err);
+          setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, uploading: false, uploadFailed: true } : b) }));
+          showToast('Upload Failed', 'error');
         }
       });
-  };
+    } catch (err) {
+      console.error(err);
+      setData(prev => ({ ...prev, bills: prev.bills.map(b => b.id === timestamp ? { ...b, uploading: false, uploadFailed: true } : b) }));
+      showToast('Upload Failed', 'error');
+    }
 
-  useEffect(() => {
-    if (view !== 'settings') { setSettingsUnlocked(false); setSettingsPassInput(''); }
-    else { setTempLimit(data.settings.limit); } 
-  }, [view, data.settings.limit]);
 
-  useEffect(() => {
+    };
+    const handleDeleteBill = async (bill) => {
+      if (!bill) return;
+      if (!confirm('Delete this bill?')) return;
+      // Optimistic UI removal: remove immediately and push to cloud
+      const updated = { ...data, bills: (data.bills || []).filter(b => b.id !== bill.id) };
+      setData(updated);
+      pushToFirebase(updated).catch(e => {
+        console.error('Failed to update cloud after delete', e);
+        showToast('Cloud delete failed, will retry', 'error');
+      });
+
+      // Background storage delete with retry; if it fails persistently, queue it for later
+      if (bill.path) {
+        (async () => {
+          try {
+            await deleteWithRetry(bill.path, 4);
+            console.info('Storage delete succeeded for', bill.path);
+          } catch (err) {
+            console.warn('Background delete failed, scheduling for retry', bill.path, err);
+            queuePendingDelete(bill.path);
+          }
+        })();
+      }
+      showToast('Bill deleted');
+    };
+
+    // --- Storage delete helpers ---
+    const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
+    const deleteWithRetry = useCallback(async (storagePath, maxAttempts = 3) => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await deleteObject(ref(storage, storagePath));
+          return true;
+        } catch (e) {
+          console.warn(`Delete attempt ${attempt} failed for ${storagePath}`, e);
+          if (attempt === maxAttempts) throw e;
+          await wait(500 * attempt);
+        }
+      }
+    }, []);
+
+    const queuePendingDelete = (storagePath) => {
+      try {
+        const key = 'dukan:pendingDeletes';
+        const raw = localStorage.getItem(key);
+        const list = raw ? JSON.parse(raw) : [];
+        if (!list.includes(storagePath)) {
+          list.push(storagePath);
+          localStorage.setItem(key, JSON.stringify(list));
+        }
+      } catch (e) {
+        console.warn('Failed to queue pending delete', e);
+      }
+    };
+
+    // Process pending deletes when online
+    useEffect(() => {
+      let cancelled = false;
+      const process = async () => {
+        if (!navigator.onLine) return;
+        try {
+          const key = 'dukan:pendingDeletes';
+          const raw = localStorage.getItem(key);
+          if (!raw) return;
+          const list = JSON.parse(raw) || [];
+          const remaining = [];
+          for (const path of list) {
+            if (cancelled) break;
+            try {
+              await deleteWithRetry(path, 3);
+              console.info('Processed pending delete', path);
+            } catch (e) {
+              console.warn('Pending delete failed, keeping in queue', path, e);
+              remaining.push(path);
+            }
+          }
+          if (!cancelled) localStorage.setItem(key, JSON.stringify(remaining));
+        } catch (e) {
+          console.warn('Error processing pending deletes', e);
+        }
+      };
+      process();
+      return () => { cancelled = true; };
+    }, [isOnline, deleteWithRetry]);
+    useEffect(() => {
     const handlePopState = () => { 
         if (view !== 'generalIndex') { 
             setView('generalIndex'); 
@@ -1204,12 +1704,13 @@ function DukanRegister() {
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
   }, []);
 
-  const handleInstallClick = () => {
+  const _handleInstallClick = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult) => { if (choiceResult.outcome === 'accepted') setDeferredPrompt(null); });
     } else { alert("Browser Menu -> Install App"); }
   };
+
 
   const requestNotificationPermission = () => {
     if (!("Notification" in window)) return;
@@ -1377,9 +1878,17 @@ function DukanRegister() {
     setTempChanges(prev => {
         const currentBufferVal = prev[id] !== undefined ? prev[id] : currentRealQty;
         const newQty = Math.max(0, currentBufferVal + amount);
+        // If change reverts back to original quantity, remove from buffer
+        if (newQty === currentRealQty) {
+          const next = { ...prev };
+          delete next[id];
+          // Inform the user that the pending update was removed
+          try { showToast(t('Change reverted, update removed'), 'error'); } catch { /* noop */ }
+          return next;
+        }
         return { ...prev, [id]: newQty };
     });
-  }, []);
+  }, [showToast, t]);
 
   const openSaveModal = () => {
     setSavePassInput('');
@@ -1470,70 +1979,13 @@ function DukanRegister() {
       const count = Object.keys(tempChanges).length;
       if (count === 0) return null;
       return (
-          <button onClick={openSaveModal} className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-4 rounded-full shadow-2xl border-2 border-white flex items-center gap-3 z-50 animate-bounce cursor-pointer hover:bg-green-700 transition-colors">
-            <SaveAll size={24} /> <span className="font-bold text-lg">{t("Update")} ({count})</span>
+          <button onClick={openSaveModal} className="fixed bottom-24 right-6 bg-green-600 text-white px-4 py-3 rounded-full shadow-2xl border-2 border-white flex items-center gap-3 z-50 animate-bounce cursor-pointer hover:bg-green-700 transition-colors">
+            <SaveAll size={20} /> <span className="font-bold text-sm">{t("Update")} ({count})</span>
           </button>
       );
   };
 
-  const renderBills = () => (
-    <div className={`pb-24 min-h-screen p-4 ${isDark ? 'bg-slate-950 text-white' : 'bg-gray-100 text-black'}`}>
-         <div className="flex justify-between items-center mb-6">
-             <h2 className="text-2xl font-bold flex items-center gap-2"><Camera/> {t("My Bills")}</h2>
-             <TranslateBtn />
-         </div>
-
-         {/* UPDATED: PHOTO LIMIT & PRICING DISPLAY */}
-         <div className={`p-6 rounded-2xl border-2 border-dashed mb-6 flex flex-col items-center justify-center gap-3 ${isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-300 bg-white'}`}>
-             
-             {/* Usage Bar */}
-             <div className="w-full mb-2">
-                 <div className="flex justify-between text-xs font-bold mb-1 opacity-70">
-                     <span>Storage Used</span>
-                     <span>{data.bills.length} / 50</span>
-                 </div>
-                 <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                     <div 
-                         className={`h-full ${data.bills.length >= 50 ? 'bg-red-500' : 'bg-green-500'}`} 
-                         style={{width: `${(data.bills.length / 50) * 100}%`}}
-                     ></div>
-                 </div>
-                 {/* Cost Message */}
-                 <p className="text-[10px] text-center mt-2 text-red-500 font-bold bg-red-50 p-1 rounded">
-                     {data.bills.length >= 50 ? "⚠️ Limit Reached. Upgrade Plan @ ₹50/Month" : "Free Plan Limit: 50 Photos"}
-                 </p>
-             </div>
-
-             <div className="bg-blue-100 p-4 rounded-full text-blue-600">
-                 <Camera size={32} />
-             </div>
-             <p className="font-bold text-center">{t("Take Photo of Bill")}</p>
-             
-             <label className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg active:scale-95 cursor-pointer flex items-center gap-2">
-                 <Smartphone size={20}/> {t("Open Camera")}
-                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleBillUpload} />
-             </label>
-         </div>
-
-         <h3 className="font-bold mb-4 opacity-70 uppercase text-xs tracking-widest">{t("Recent Bills")}</h3>
-         
-         <div className="grid grid-cols-2 gap-4">
-             {(!data.bills || data.bills.length === 0) && <p className="col-span-2 text-center opacity-50 italic">No bills uploaded yet.</p>}
-             
-             {(data.bills || []).sort((a,b) => new Date(b.date) - new Date(a.date)).map(bill => (
-                 <div key={bill.id} onClick={() => setViewImage(bill.image ? bill.image : bill)} className={`rounded-xl overflow-hidden border shadow-sm relative group cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-                     <img src={bill.image ? bill.image : bill} alt="Bill" className="w-full h-40 object-cover" />
-                     <div className="p-2">
-                         <p className="text-[10px] opacity-70">{new Date(bill.date || Date.now()).toLocaleDateString()}</p>
-                     </div>
-                     <button onClick={(e) => { e.stopPropagation(); handleDeleteBill(bill); }} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-100 shadow-lg">
-                         <Trash2 size={16}/>
-                     </button>
-                 </div>
-             ))}
-         </div>
-    </div>
-  );
+    // Bills UI removed — feature deprecated per user request
 
   if (authLoading || (user && dbLoading)) {
       return (
@@ -1631,7 +2083,7 @@ function DukanRegister() {
           <div className="w-12 font-black text-center">Edit</div>
         </div>
         <div className="min-h-[20vh]">
-          {globalSearchResults.pages.map((page, idx) => (
+          {globalSearchResults.pages.map((page) => (
             <div key={page.id} onClick={() => { setActivePageId(page.id); setView('page'); setPageSearchTerm(''); }} className={`flex border-b border-gray-300 cursor-pointer hover:bg-blue-50 transition-colors h-14 items-center ${isDark ? 'text-white hover:bg-slate-800' : 'text-black'}`}>
               <div className="w-12 text-center font-bold text-red-600 border-r border-gray-300 h-full flex items-center justify-center text-sm">{page.pageNo}</div>
               <div className="flex-1 pl-3 font-semibold text-lg border-r border-gray-300 h-full flex items-center truncate">{t(page.itemName)}</div>
@@ -1666,7 +2118,7 @@ function DukanRegister() {
         </div>
         
         <div className="flex flex-col gap-3">
-            {globalSearchResults.pages.map((page, idx) => {
+            {globalSearchResults.pages.map((page) => {
                   const totalItems = pageCounts[page.id] || 0;
                   return (
                      <div key={page.id} onClick={() => { setActivePageId(page.id); setView('page'); setPageSearchTerm(''); }} className={`relative p-4 rounded-xl border-2 shadow-sm cursor-pointer active:scale-95 transition-all flex flex-row items-center justify-between h-24 ${isDark ? 'bg-slate-800 border-slate-600 hover:border-blue-500' : 'bg-white border-gray-200 hover:border-blue-500'}`}>
@@ -1987,7 +2439,7 @@ function DukanRegister() {
       {view === 'alerts' && renderAlerts()}
       {view === 'settings' && renderSettings()}
       
-      {view === 'bills' && renderBills()}
+      {/* Bills view removed */}
 
       {view === 'tools' && <ToolsHub onBack={() => setView('settings')} t={t} isDark={isDark} initialTool={activeToolId} pinnedTools={data.settings.pinnedTools || []} onTogglePin={handleTogglePin} shopDetails={data.settings}/>}
       
@@ -1998,7 +2450,7 @@ function DukanRegister() {
          <NavBtn icon={Grid} label={t("Pages")} active={view === 'pagesGrid'} onClick={() => { setView('pagesGrid'); setIndexSearchTerm(''); setActivePageId(null); }} isDark={isDark}/>
          <NavBtn icon={Search} label={t("Search")} active={view === 'stockSearch'} onClick={() => { setView('stockSearch'); setStockSearchTerm(''); }} isDark={isDark}/>
          <NavBtn icon={AlertTriangle} label={t("Alerts")} active={view === 'alerts'} onClick={() => setView('alerts')} alert={(data.entries || []).some(e => e.qty < data.settings.limit)} isDark={isDark}/>
-         <NavBtn icon={Camera} label={t("Camera")} active={view === 'bills'} onClick={() => setView('bills')} isDark={isDark}/>
+         {/* My Bills nav removed */}
          <NavBtn icon={Settings} label={t("Settings")} active={view === 'settings'} onClick={() => setView('settings')} isDark={isDark}/>
       </div>
 
@@ -2152,4 +2604,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-    }
+  }
