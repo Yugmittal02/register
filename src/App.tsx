@@ -2042,16 +2042,21 @@ function DukanRegister() {
   if (data && data.appStatus === 'blocked') {
     const fid = fbDocId || (user && user.uid) || 'Unknown';
     return (
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-white dark:bg-slate-900 p-6">
-        <div className="max-w-xl w-full bg-white dark:bg-slate-800 border rounded-xl shadow-xl p-6 text-center">
-          <h2 className="text-2xl font-extrabold text-red-600 mb-2">Account Blocked</h2>
-          <p className="mb-4 text-gray-700 dark:text-gray-300">Your shop has been blocked by the administrator.
-            Payment is pending and access has been restricted until the issue is resolved.</p>
-          <p className="text-sm mb-4"><strong>Firebase ID:</strong> {fid}</p>
-          <p className="text-sm mb-6">Please contact the administrator to resolve billing or account issues.</p>
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900 p-6">
+        <div className="max-w-xl w-full bg-slate-800 border rounded-xl shadow-xl p-6 text-center">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <ShieldAlert size={22} className="text-red-400" />
+            <h2 className="text-2xl font-extrabold text-red-500">Police Request</h2>
+          </div>
+          <h3 className="text-xl font-bold mb-2 text-[#f5e6cc]">Account Blocked</h3>
+          <p className="mb-4 text-[#f5e6cc]">Your shop has been blocked by the administrator. Payment is pending and access has been restricted until the issue is resolved.</p>
+          <p className="text-sm mb-4 text-[#f5e6cc]"><strong>Firebase ID:</strong> {fid}</p>
+          <p className="text-sm mb-6 text-[#f5e6cc]">Please contact the administrator to resolve billing or account issues.</p>
           <div className="flex gap-3 justify-center">
-            <a className="px-4 py-2 bg-blue-600 text-white rounded" href={`mailto:admin@automationx.com?subject=Account%20Blocked%20(${encodeURIComponent(fid)})`}>Contact Administrator</a>
-            <button onClick={() => { navigator.clipboard?.writeText(fid); showToast('Firebase ID copied to clipboard'); }} className="px-4 py-2 bg-gray-200 dark:bg-slate-700 rounded">Copy ID</button>
+            <a className="px-4 py-2 bg-amber-500 text-slate-900 rounded inline-flex items-center gap-2 font-bold" href={`tel:8619152422`}>
+              <Phone size={16} /> Call 8619152422
+            </a>
+            <button onClick={() => { navigator.clipboard?.writeText(fid); showToast('Firebase ID copied to clipboard'); }} className="px-4 py-2 bg-gray-700 text-[#f5e6cc] rounded">Copy ID</button>
           </div>
         </div>
       </div>
@@ -2627,4 +2632,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-      }
+  }
