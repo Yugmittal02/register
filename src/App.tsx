@@ -1118,7 +1118,6 @@ function DukanRegister() {
       };
     });
   };
-
   const handleBillUpload = async (e) => {
     if(data.bills.length >= 50) return alert("Storage Limit Reached (Max 50 Photos)");
     const file = e.target.files[0];
@@ -1138,11 +1137,15 @@ function DukanRegister() {
         const newBill = {
             id: timestamp,
             date: new Date().toISOString(),
-            image: downloadUrl, 
+            image: downloadUrl, // Cloud URL
             path: storagePath 
         };
         
+        // --- 🟢 FIX IS HERE: Pehle local state update karein, fir server par bhejein ---
         const newData = { ...data, bills: [newBill, ...(data.bills || [])] };
+        
+        setData(newData); // <--- YE LINE MISSING THI (Ab photo turant dikhegi)
+        
         await pushToFirebase(newData);
         showToast("Bill Saved!");
     } catch (err) {
@@ -2149,4 +2152,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-                  }
+    }
