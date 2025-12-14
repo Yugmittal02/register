@@ -2044,17 +2044,17 @@ function DukanRegister() {
     return (
       <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900 p-6">
         <div className="max-w-xl w-full bg-slate-800 border rounded-xl shadow-xl p-6 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <ShieldAlert size={22} className="text-red-400" />
-            <h2 className="text-2xl font-extrabold text-red-500">Police Request</h2>
-          </div>
-          <h3 className="text-xl font-bold mb-2 text-[#f5e6cc]">Account Blocked</h3>
+          <h3 className="text-2xl font-bold mb-2 text-[#f5e6cc]">Account Blocked</h3>
           <p className="mb-4 text-[#f5e6cc]">Your shop has been blocked by the administrator. Payment is pending and access has been restricted until the issue is resolved.</p>
-          <p className="text-sm mb-4 text-[#f5e6cc]"><strong>Firebase ID:</strong> {fid}</p>
+          <p className="text-sm mb-4 text-[#f5e6cc] flex items-center justify-center gap-2"><strong>Firebase ID:</strong> <span className="font-mono">{fid}</span>
+            <button onClick={() => { navigator.clipboard?.writeText(fid); showToast('Firebase ID copied to clipboard'); }} title="Copy Firebase ID" className="ml-2 inline-flex items-center justify-center p-1 rounded bg-transparent text-[#f5e6cc] hover:bg-slate-700">
+              <Copy size={14} />
+            </button>
+          </p>
           <p className="text-sm mb-6 text-[#f5e6cc]">Please contact the administrator to resolve billing or account issues.</p>
           <div className="flex gap-3 justify-center">
             <a className="px-4 py-2 bg-amber-500 text-slate-900 rounded inline-flex items-center gap-2 font-bold" href={`tel:8619152422`}>
-              <Phone size={16} /> Call 8619152422
+              Contact
             </a>
             <button onClick={() => { navigator.clipboard?.writeText(fid); showToast('Firebase ID copied to clipboard'); }} className="px-4 py-2 bg-gray-700 text-[#f5e6cc] rounded">Copy ID</button>
           </div>
@@ -2632,4 +2632,4 @@ export default function App() {
             <DukanRegister />
         </ErrorBoundary>
     );
-  }
+    }
