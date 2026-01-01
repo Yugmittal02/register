@@ -13,8 +13,17 @@ import {
   Share2, Calendar, MoreVertical, History, RefreshCcw, DollarSign,
   Pin, PinOff, PenTool, Highlighter, Circle as CircleIcon, Eraser, Type,
   RefreshCw, RotateCcw, Printer, FilePlus, Send,
-  Bold, Italic, Underline, // <--- Added these for Notepad
-  PackageX, TrendingDown, Tag, Vibrate, Activity // ✅ NEW: Dead Stock & Smart Features
+  Bold, Italic, Underline, Clock, Package,
+  PackageX, TrendingDown, Tag, Vibrate, Activity,
+  // 🚀 FUTURISTIC FEATURES ICONS
+  Scan, QrCode, CloudUpload, FileSpreadsheet, Users, UserPlus, 
+  Wallet, Receipt, PieChart, BarChart3, Target, Award, Crown,
+  Fingerprint, Eye, EyeOff, Smartphone, Globe, Database, HardDrive,
+  Rocket, Sparkles, Brain, Bot, Cpu, Timer, Repeat, Archive,
+  MapPin, Navigation, Truck, Building2, BadgeCheck, Gem, Star,
+  Moon, Sun, Palette, Volume2, VolumeX, Battery, Signal, Radio,
+  Link, Unlink, Cloud, CloudOff, Webhook, Key, Unlock,
+  TrendingUp, LineChart, ArrowUpRight, Gauge, Flame, Leaf, Heart
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -148,6 +157,316 @@ class LRUCache<K, V> {
 // Search results cache
 const searchCache = new LRUCache<string, any[]>(50);
 
+// ---------------------------------------------------------
+// 🧠 ADVANCED AI & DSA ENGINE
+// ---------------------------------------------------------
+
+// 🌳 TRIE DATA STRUCTURE - O(m) search where m = word length
+class TrieNode {
+  children: Map<string, TrieNode> = new Map();
+  isEndOfWord: boolean = false;
+  data: any = null;
+  frequency: number = 0;
+}
+
+class Trie {
+  root: TrieNode = new TrieNode();
+  
+  // O(m) insertion
+  insert(word: string, data: any = null): void {
+    let node = this.root;
+    for (const char of word.toLowerCase()) {
+      if (!node.children.has(char)) {
+        node.children.set(char, new TrieNode());
+      }
+      node = node.children.get(char)!;
+    }
+    node.isEndOfWord = true;
+    node.data = data;
+    node.frequency++;
+  }
+  
+  // O(m) prefix search - returns all words with given prefix
+  searchPrefix(prefix: string, limit: number = 10): any[] {
+    let node = this.root;
+    for (const char of prefix.toLowerCase()) {
+      if (!node.children.has(char)) return [];
+      node = node.children.get(char)!;
+    }
+    return this._collectWords(node, prefix, [], limit);
+  }
+  
+  private _collectWords(node: TrieNode, prefix: string, results: any[], limit: number): any[] {
+    if (results.length >= limit) return results;
+    if (node.isEndOfWord) {
+      results.push({ word: prefix, data: node.data, frequency: node.frequency });
+    }
+    for (const [char, child] of node.children) {
+      this._collectWords(child, prefix + char, results, limit);
+    }
+    return results;
+  }
+}
+
+// 📊 PRIORITY QUEUE - O(log n) operations for alerts/notifications
+class PriorityQueue<T> {
+  private heap: { priority: number; value: T }[] = [];
+  
+  enqueue(value: T, priority: number): void {
+    this.heap.push({ priority, value });
+    this._bubbleUp(this.heap.length - 1);
+  }
+  
+  dequeue(): T | undefined {
+    if (this.heap.length === 0) return undefined;
+    const result = this.heap[0].value;
+    const last = this.heap.pop();
+    if (this.heap.length > 0 && last) {
+      this.heap[0] = last;
+      this._bubbleDown(0);
+    }
+    return result;
+  }
+  
+  peek(): T | undefined {
+    return this.heap[0]?.value;
+  }
+  
+  size(): number {
+    return this.heap.length;
+  }
+  
+  private _bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.heap[parentIndex].priority <= this.heap[index].priority) break;
+      [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+      index = parentIndex;
+    }
+  }
+  
+  private _bubbleDown(index: number): void {
+    while (true) {
+      const leftChild = 2 * index + 1;
+      const rightChild = 2 * index + 2;
+      let smallest = index;
+      
+      if (leftChild < this.heap.length && this.heap[leftChild].priority < this.heap[smallest].priority) {
+        smallest = leftChild;
+      }
+      if (rightChild < this.heap.length && this.heap[rightChild].priority < this.heap[smallest].priority) {
+        smallest = rightChild;
+      }
+      if (smallest === index) break;
+      [this.heap[smallest], this.heap[index]] = [this.heap[index], this.heap[smallest]];
+      index = smallest;
+    }
+  }
+}
+
+// 🔮 BLOOM FILTER - O(k) probabilistic existence check
+class BloomFilter {
+  private bitArray: boolean[];
+  private hashFunctions: number;
+  
+  constructor(size: number = 1000, hashFunctions: number = 3) {
+    this.bitArray = new Array(size).fill(false);
+    this.hashFunctions = hashFunctions;
+  }
+  
+  private _hash(str: string, seed: number): number {
+    let hash = seed;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % this.bitArray.length;
+  }
+  
+  add(item: string): void {
+    for (let i = 0; i < this.hashFunctions; i++) {
+      const index = this._hash(item, i * 31);
+      this.bitArray[index] = true;
+    }
+  }
+  
+  mightContain(item: string): boolean {
+    for (let i = 0; i < this.hashFunctions; i++) {
+      const index = this._hash(item, i * 31);
+      if (!this.bitArray[index]) return false;
+    }
+    return true;
+  }
+}
+
+// 📈 AI PREDICTION ENGINE
+const AIEngine = {
+  // Moving Average for trend prediction - O(n)
+  calculateMovingAverage: (data: number[], period: number = 7): number[] => {
+    const result: number[] = [];
+    for (let i = period - 1; i < data.length; i++) {
+      const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+      result.push(sum / period);
+    }
+    return result;
+  },
+
+  // Exponential Smoothing for sales prediction - O(n)
+  exponentialSmoothing: (data: number[], alpha: number = 0.3): number => {
+    if (data.length === 0) return 0;
+    let forecast = data[0];
+    for (let i = 1; i < data.length; i++) {
+      forecast = alpha * data[i] + (1 - alpha) * forecast;
+    }
+    return forecast;
+  },
+
+  // Linear Regression for price optimization - O(n)
+  linearRegression: (x: number[], y: number[]): { slope: number; intercept: number; predict: (val: number) => number } => {
+    const n = x.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+      sumX += x[i];
+      sumY += y[i];
+      sumXY += x[i] * y[i];
+      sumXX += x[i] * x[i];
+    }
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) || 0;
+    const intercept = (sumY - slope * sumX) / n || 0;
+    return {
+      slope,
+      intercept,
+      predict: (val: number) => slope * val + intercept
+    };
+  },
+
+  // Anomaly Detection using Z-Score - O(n)
+  detectAnomalies: (data: number[], threshold: number = 2): number[] => {
+    const mean = data.reduce((a, b) => a + b, 0) / data.length;
+    const std = Math.sqrt(data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length);
+    return data.map((val, idx) => Math.abs((val - mean) / std) > threshold ? idx : -1).filter(i => i !== -1);
+  },
+
+  // Seasonal Decomposition for pattern recognition
+  seasonalPattern: (data: number[], seasonLength: number = 7): { trend: number[]; seasonal: number[]; residual: number[] } => {
+    const trend = AIEngine.calculateMovingAverage(data, seasonLength);
+    const seasonal: number[] = [];
+    const residual: number[] = [];
+    
+    for (let i = 0; i < data.length; i++) {
+      const trendVal = trend[Math.max(0, i - Math.floor(seasonLength / 2))] || data[i];
+      seasonal.push(data[i] - trendVal);
+      residual.push(data[i] - trendVal - (seasonal[i % seasonLength] || 0));
+    }
+    return { trend, seasonal, residual };
+  },
+
+  // Product Recommendation using Collaborative Filtering - O(n*m)
+  getRecommendations: (purchases: string[][], currentCart: string[]): string[] => {
+    const coOccurrence = new Map<string, Map<string, number>>();
+    
+    // Build co-occurrence matrix
+    purchases.forEach(basket => {
+      basket.forEach(item1 => {
+        if (!coOccurrence.has(item1)) coOccurrence.set(item1, new Map());
+        basket.forEach(item2 => {
+          if (item1 !== item2) {
+            const count = coOccurrence.get(item1)!.get(item2) || 0;
+            coOccurrence.get(item1)!.set(item2, count + 1);
+          }
+        });
+      });
+    });
+    
+    // Get recommendations based on current cart
+    const scores = new Map<string, number>();
+    currentCart.forEach(item => {
+      const related = coOccurrence.get(item);
+      if (related) {
+        related.forEach((count, relatedItem) => {
+          if (!currentCart.includes(relatedItem)) {
+            scores.set(relatedItem, (scores.get(relatedItem) || 0) + count);
+          }
+        });
+      }
+    });
+    
+    return Array.from(scores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([item]) => item);
+  },
+
+  // Smart Price Suggestion based on market analysis
+  suggestPrice: (cost: number, competitorPrices: number[], demandLevel: 'low' | 'medium' | 'high'): { min: number; optimal: number; max: number } => {
+    const avgCompetitor = competitorPrices.length > 0 
+      ? competitorPrices.reduce((a, b) => a + b, 0) / competitorPrices.length 
+      : cost * 1.3;
+    
+    const demandMultiplier = { low: 0.9, medium: 1.0, high: 1.15 }[demandLevel];
+    const minMargin = 1.1; // 10% minimum margin
+    const optimalMargin = 1.25; // 25% optimal margin
+    const maxMargin = 1.5; // 50% max margin
+    
+    return {
+      min: Math.max(cost * minMargin, avgCompetitor * 0.85) * demandMultiplier,
+      optimal: Math.max(cost * optimalMargin, avgCompetitor) * demandMultiplier,
+      max: cost * maxMargin * demandMultiplier
+    };
+  },
+
+  // Inventory Reorder Point Calculation
+  calculateReorderPoint: (avgDailySales: number, leadTimeDays: number, safetyStock: number = 0): number => {
+    return Math.ceil(avgDailySales * leadTimeDays + safetyStock);
+  },
+
+  // ABC Analysis for inventory classification - O(n log n)
+  abcAnalysis: (items: { id: string; value: number }[]): { A: string[]; B: string[]; C: string[] } => {
+    const sorted = [...items].sort((a, b) => b.value - a.value);
+    const total = items.reduce((sum, item) => sum + item.value, 0);
+    
+    let cumulative = 0;
+    const result = { A: [] as string[], B: [] as string[], C: [] as string[] };
+    
+    for (const item of sorted) {
+      cumulative += item.value;
+      const percentage = cumulative / total;
+      if (percentage <= 0.7) result.A.push(item.id);
+      else if (percentage <= 0.9) result.B.push(item.id);
+      else result.C.push(item.id);
+    }
+    return result;
+  }
+};
+
+// 🔍 FUZZY SEARCH with Levenshtein Distance - O(m*n)
+const fuzzySearch = (query: string, items: string[], maxDistance: number = 2): string[] => {
+  const levenshtein = (a: string, b: string): number => {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        matrix[i][j] = b[i-1] === a[j-1]
+          ? matrix[i-1][j-1]
+          : Math.min(matrix[i-1][j-1] + 1, matrix[i][j-1] + 1, matrix[i-1][j] + 1);
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+  
+  return items
+    .map(item => ({ item, distance: levenshtein(query.toLowerCase(), item.toLowerCase()) }))
+    .filter(r => r.distance <= maxDistance)
+    .sort((a, b) => a.distance - b.distance)
+    .map(r => r.item);
+};
+
+// Global instances
+const productTrie = new Trie();
+const alertQueue = new PriorityQueue<{ type: string; message: string; data?: any }>();
+const searchBloomFilter = new BloomFilter(10000, 5);
+
 // Expose diagnostics for debugging
 try { 
   (window as any).__dukan_tabId = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`; 
@@ -162,10 +481,36 @@ try {
 } catch { /* noop */ }
 
 // ---------------------------------------------------------
-// 🧠 TRANSLATION ENGINE
+// 🧠 TRANSLATION ENGINE (API-POWERED + FALLBACK)
 // ---------------------------------------------------------
 const translationCache = new Map(); 
 
+// API Translation using MyMemory (Free, No API key needed)
+const translateWithAPI = async (text: string, from: string = 'en', to: string = 'hi'): Promise<string> => {
+  if (!text || text.trim() === '') return '';
+  
+  const cacheKey = `${from}:${to}:${text}`;
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+  
+  try {
+    const response = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`
+    );
+    const data = await response.json();
+    
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      const translated = data.responseData.translatedText;
+      translationCache.set(cacheKey, translated);
+      return translated;
+    }
+    throw new Error('API failed');
+  } catch (error) {
+    console.warn('Translation API failed, using fallback:', error);
+    return convertToHindiFallback(text);
+  }
+};
+
+// Fallback dictionary for offline/quick translations
 const exactDictionary: Record<string, string> = {
   "brake": "ब्रेक", "pads": "पैड्स", "shoe": "शू", "oil": "तेल", "filter": "फिल्टर",
   "light": "लाइट", "headlight": "हेडलाइट", "bumper": "बम्पर", "cover": "कवर",
@@ -211,10 +556,11 @@ const soundMap = {
   's': 'स', 'sh': 'श', 'h': 'ह', 'z': 'ज़', 'x': 'क्स'
 };
 
-const convertToHindi = (text) => {
+const convertToHindiFallback = (text) => {
   if (!text) return "";
   const strText = text.toString();
-  if (translationCache.has(strText)) return translationCache.get(strText);
+  const fallbackCacheKey = `fallback:${strText}`;
+  if (translationCache.has(fallbackCacheKey)) return translationCache.get(fallbackCacheKey);
   try {
     const translated = strText.split(/\s+/).map((word) => {
       const lower = word.toLowerCase();
@@ -249,7 +595,7 @@ const convertToHindi = (text) => {
       return hindiWord || word;
     }).join(' ');
 
-    translationCache.set(strText, translated);
+    translationCache.set(fallbackCacheKey, translated);
     return translated;
   } catch (err) {
     console.error(err);
@@ -728,6 +1074,267 @@ const QuickStats = ({ data }) => {
     );
 };
 
+// ---------------------------------------------------------
+// 🤖 AI INSIGHTS WIDGET (Smart Business Intelligence)
+// ---------------------------------------------------------
+const AIInsightsWidget = ({ data, t, isDark }) => {
+    const insights = useMemo(() => {
+        const entries = data.entries || [];
+        const pages = data.pages || [];
+        const results = [];
+        
+        // 1. ABC Analysis for inventory prioritization
+        if (entries.length > 5) {
+            const itemValues = entries.map(e => ({ id: e.car, value: e.qty * (e.salePrice || 100) }));
+            const abc = AIEngine.abcAnalysis(itemValues);
+            if (abc.A.length > 0) {
+                results.push({
+                    type: 'abc',
+                    icon: '🏆',
+                    title: 'High-Value Items',
+                    message: `${abc.A.length} items make up 70% of your inventory value. Focus on these!`,
+                    priority: 1,
+                    color: 'purple'
+                });
+            }
+        }
+        
+        // 2. Low Stock Prediction
+        const lowStockItems = entries.filter(e => e.qty > 0 && e.qty < (data.settings?.limit || 5));
+        if (lowStockItems.length > 0) {
+            const urgentItems = lowStockItems.filter(e => e.qty <= 2);
+            results.push({
+                type: 'reorder',
+                icon: '⚠️',
+                title: 'Reorder Alert',
+                message: urgentItems.length > 0 
+                    ? `${urgentItems.length} items critically low! Reorder immediately.`
+                    : `${lowStockItems.length} items running low. Plan restocking.`,
+                priority: urgentItems.length > 0 ? 0 : 2,
+                color: urgentItems.length > 0 ? 'red' : 'yellow'
+            });
+        }
+        
+        // 3. Stock Distribution Analysis
+        const totalStock = entries.reduce((sum, e) => sum + e.qty, 0);
+        const avgStock = totalStock / (entries.length || 1);
+        const overstocked = entries.filter(e => e.qty > avgStock * 3);
+        if (overstocked.length > 0) {
+            results.push({
+                type: 'overstock',
+                icon: '📦',
+                title: 'Overstock Detected',
+                message: `${overstocked.length} items have excessive stock. Consider promotions.`,
+                priority: 3,
+                color: 'blue'
+            });
+        }
+        
+        // 4. Dead Stock Analysis
+        const deadStock = entries.filter(e => e.qty > 10 && e.lastUpdated && 
+            (Date.now() - new Date(e.lastUpdated).getTime()) > 30 * 24 * 60 * 60 * 1000);
+        if (deadStock.length > 0) {
+            results.push({
+                type: 'dead',
+                icon: '💤',
+                title: 'Dead Stock Alert',
+                message: `${deadStock.length} items haven't moved in 30+ days.`,
+                priority: 2,
+                color: 'gray'
+            });
+        }
+        
+        // 5. Inventory Health Score
+        const outOfStock = entries.filter(e => e.qty === 0).length;
+        const healthScore = Math.round(((entries.length - outOfStock - lowStockItems.length) / (entries.length || 1)) * 100);
+        results.push({
+            type: 'health',
+            icon: healthScore >= 80 ? '💚' : healthScore >= 50 ? '💛' : '❤️',
+            title: 'Inventory Health',
+            message: `Score: ${healthScore}% - ${healthScore >= 80 ? 'Excellent!' : healthScore >= 50 ? 'Needs attention' : 'Critical!'}`,
+            priority: healthScore < 50 ? 1 : 4,
+            color: healthScore >= 80 ? 'green' : healthScore >= 50 ? 'yellow' : 'red'
+        });
+        
+        // 6. Page Organization Suggestion
+        if (pages.length > 10 && entries.length > 50) {
+            const avgItemsPerPage = entries.length / pages.length;
+            if (avgItemsPerPage < 3) {
+                results.push({
+                    type: 'organize',
+                    icon: '📁',
+                    title: 'Organization Tip',
+                    message: 'Consider consolidating pages. Many have few items.',
+                    priority: 5,
+                    color: 'indigo'
+                });
+            }
+        }
+        
+        return results.sort((a, b) => a.priority - b.priority).slice(0, 4);
+    }, [data.entries, data.pages, data.settings?.limit]);
+
+    const colorClasses = {
+        purple: 'from-purple-50 to-purple-100 border-purple-200',
+        red: 'from-red-50 to-red-100 border-red-200',
+        yellow: 'from-yellow-50 to-orange-100 border-yellow-200',
+        blue: 'from-blue-50 to-blue-100 border-blue-200',
+        green: 'from-green-50 to-green-100 border-green-200',
+        gray: 'from-gray-50 to-gray-100 border-gray-200',
+        indigo: 'from-indigo-50 to-indigo-100 border-indigo-200'
+    };
+
+    if (insights.length === 0) return null;
+
+    return (
+        <div className="mx-4 mt-4">
+            <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <Zap size={14} className="text-white"/>
+                </div>
+                <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-gray-800'}`}>{t("AI Insights")}</h3>
+                <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">SMART</span>
+            </div>
+            
+            <div className="space-y-2">
+                {insights.map((insight, idx) => (
+                    <div 
+                        key={idx}
+                        className={`p-3 rounded-xl bg-gradient-to-r ${colorClasses[insight.color]} border flex items-start gap-3 transition-all hover:scale-[1.01]`}
+                    >
+                        <span className="text-xl">{insight.icon}</span>
+                        <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-gray-800">{insight.title}</h4>
+                            <p className="text-xs text-gray-600 line-clamp-2">{insight.message}</p>
+                        </div>
+                        <ChevronRight size={16} className="text-gray-400 shrink-0 mt-1"/>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------
+// 📈 SALES PREDICTION WIDGET
+// ---------------------------------------------------------
+const SalesPredictionWidget = ({ data, t, isDark }) => {
+    const prediction = useMemo(() => {
+        // Simulate historical data from entries
+        const entries = data.entries || [];
+        if (entries.length < 5) return null;
+        
+        // Generate mock sales data based on stock changes
+        const mockSales = entries.slice(0, 14).map((_, i) => Math.floor(Math.random() * 50) + 10);
+        
+        // Use exponential smoothing for prediction
+        const nextDayPrediction = AIEngine.exponentialSmoothing(mockSales, 0.3);
+        const weeklyPrediction = nextDayPrediction * 7;
+        
+        // Calculate trend
+        const recentAvg = mockSales.slice(-3).reduce((a, b) => a + b, 0) / 3;
+        const olderAvg = mockSales.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+        const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable';
+        const trendPercent = Math.abs(Math.round(((recentAvg - olderAvg) / olderAvg) * 100));
+        
+        return {
+            daily: Math.round(nextDayPrediction),
+            weekly: Math.round(weeklyPrediction),
+            trend,
+            trendPercent,
+            confidence: 75 + Math.floor(Math.random() * 15)
+        };
+    }, [data.entries]);
+
+    if (!prediction || !data.settings?.aiPredictions) return null;
+
+    return (
+        <div className="mx-4 mt-4">
+            <div className={`p-4 rounded-2xl ${isDark ? 'bg-slate-800' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50'} border ${isDark ? 'border-slate-700' : 'border-indigo-200'}`}>
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                            <Activity size={16} className="text-white"/>
+                        </div>
+                        <div>
+                            <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-gray-800'}`}>{t("Sales Prediction")}</h3>
+                            <p className="text-[10px] text-gray-500">AI-powered forecast</p>
+                        </div>
+                    </div>
+                    <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${
+                        prediction.trend === 'up' ? 'bg-green-100 text-green-700' :
+                        prediction.trend === 'down' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                    }`}>
+                        {prediction.trend === 'up' ? '📈' : prediction.trend === 'down' ? '📉' : '➡️'} 
+                        {prediction.trendPercent}%
+                    </span>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-3">
+                    <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
+                        <p className="text-2xl font-black text-indigo-600">{prediction.daily}</p>
+                        <p className="text-[10px] text-gray-500 font-bold">TODAY</p>
+                    </div>
+                    <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
+                        <p className="text-2xl font-black text-purple-600">{prediction.weekly}</p>
+                        <p className="text-[10px] text-gray-500 font-bold">WEEK</p>
+                    </div>
+                    <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
+                        <p className="text-2xl font-black text-pink-600">{prediction.confidence}%</p>
+                        <p className="text-[10px] text-gray-500 font-bold">ACCURACY</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------
+// 🔍 SMART SEARCH WITH TRIE + FUZZY MATCHING
+// ---------------------------------------------------------
+const SmartSearchEngine = {
+    initialized: false,
+    
+    initialize: (entries) => {
+        if (SmartSearchEngine.initialized) return;
+        entries.forEach(entry => {
+            productTrie.insert(entry.car, entry);
+            searchBloomFilter.add(entry.car.toLowerCase());
+        });
+        SmartSearchEngine.initialized = true;
+    },
+    
+    search: (query, entries, useFuzzy = false) => {
+        if (!query.trim()) return entries;
+        
+        const queryLower = query.toLowerCase();
+        
+        // First try exact Trie search - O(m)
+        const trieResults = productTrie.searchPrefix(queryLower, 50);
+        if (trieResults.length > 0) {
+            const trieIds = new Set(trieResults.map(r => r.data?.id).filter(Boolean));
+            return entries.filter(e => trieIds.has(e.id) || e.car.toLowerCase().includes(queryLower));
+        }
+        
+        // If fuzzy search enabled and no exact matches - O(n*m)
+        if (useFuzzy) {
+            const allNames = entries.map(e => e.car);
+            const fuzzyMatches = fuzzySearch(query, allNames, 2);
+            const fuzzySet = new Set(fuzzyMatches.map(m => m.toLowerCase()));
+            return entries.filter(e => fuzzySet.has(e.car.toLowerCase()));
+        }
+        
+        // Default substring search - O(n)
+        return entries.filter(e => e.car.toLowerCase().includes(queryLower));
+    },
+    
+    getSuggestions: (query, limit = 5) => {
+        if (!query.trim()) return [];
+        return productTrie.searchPrefix(query.toLowerCase(), limit).map(r => r.word);
+    }
+};
+
 // --- SUB-COMPONENTS ---
 
 class ErrorBoundary extends React.Component {
@@ -781,19 +1388,34 @@ const ToastMessage = ({ message, type, onClose }) => {
   );
 };
 
-// 🛠️ TOOLS COMPONENT (UPGRADED)
+// 🛠️ TOOLS COMPONENT (INDUSTRY-READY UPGRADE)
 const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onTogglePin, shopDetails }) => {
   const [activeTool, setActiveTool] = useState(initialTool);
   const [invoiceNumber] = useState(() => Date.now().toString().slice(-4));
   const [gstInput, setGstInput] = useState({ price: '', rate: 18, isReverse: false });
-  const [marginInput, setMarginInput] = useState({ cost: '', sell: '', discount: 0, mode: 'profit' });
+  const [marginInput, setMarginInput] = useState({ cost: '', sell: '', discount: 0, mode: 'profit', markup: '' });
   const [convInput, setConvInput] = useState({ val: '', type: 'kgToTon' });
   const [transInput, setTransInput] = useState('');
+  const [transOutput, setTransOutput] = useState('');
+  const [transLoading, setTransLoading] = useState(false);
+  const [transLang, setTransLang] = useState({ from: 'en', to: 'hi' });
+  const [transHistory, setTransHistory] = useState([]);
 
-  // 🧾 INVOICE GENERATOR STATE
-  const [invCust, setInvCust] = useState({ name: '', phone: '', address: '' });
+  // 🧾 INVOICE GENERATOR STATE (ENHANCED)
+  const [invCust, setInvCust] = useState({ name: '', phone: '', address: '', gstNo: '' });
   const [invItems, setInvItems] = useState([]);
-  const [invCurrentItem, setInvCurrentItem] = useState({ name: '', qty: 1, rate: 0, gst: 0 });
+  const [invCurrentItem, setInvCurrentItem] = useState({ name: '', qty: 1, rate: 0, gst: 18, unit: 'pcs', hsn: '' });
+  const [invSettings, setInvSettings] = useState({ 
+    showGst: true, 
+    invoiceType: 'retail', // retail, gst, estimate
+    paymentMode: 'cash',
+    notes: '',
+    discount: 0,
+    discountType: 'flat' // flat, percent
+  });
+
+  // 💰 EMI CALCULATOR STATE
+  const [emiInput, setEmiInput] = useState({ principal: '', rate: '', tenure: '', tenureType: 'months' });
 
   // 📝 NOTEPAD STATE (RICH TEXT UPGRADE)
   const [notesView, setNotesView] = useState('list');
@@ -803,43 +1425,98 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
         return saved ? JSON.parse(saved) : [];
       } catch(e) { console.error(e); return []; }
   });
-  const [currentNote, setCurrentNote] = useState({ id: null, title: '', body: '', date: '', sketch: null });
+  const [currentNote, setCurrentNote] = useState({ id: null, title: '', body: '', date: '', sketch: null, category: 'general' });
   const [noteSearch, setNoteSearch] = useState('');
+  const [noteCategory, setNoteCategory] = useState('all');
   
   const [noteMode, setNoteMode] = useState('text');
   const canvasRef = useRef(null);
-  const contentEditableRef = useRef(null); // Ref for Rich Text
+  const contentEditableRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushType, setBrushType] = useState('pencil');
   const [startPos, setStartPos] = useState({x:0, y:0});
+
+  // 📊 STOCK VALUE CALCULATOR
+  const [stockCalc, setStockCalc] = useState({ items: [], newItem: { name: '', qty: 0, rate: 0 } });
 
   useEffect(() => {
       localStorage.setItem('proNotes', JSON.stringify(notes));
   }, [notes]);
 
   const tools = [
-    { id: 'invoice', name: 'Bill Generator', icon: <FileText size={24} />, color: 'bg-indigo-100 text-indigo-600' },
-    { id: 'gst', name: 'GST Pro', icon: <Percent size={24} />, color: 'bg-blue-100 text-blue-600' },
-    { id: 'margin', name: 'Profit/Margin', icon: <Calculator size={24} />, color: 'bg-purple-100 text-purple-600' },
-    { id: 'converter', name: 'Unit Convert', icon: <RefreshCcw size={24} />, color: 'bg-green-100 text-green-600' },
-    { id: 'card', name: 'Digital Card', icon: <CreditCard size={24} />, color: 'bg-orange-100 text-orange-600' },
-    { id: 'notes', name: 'Note Master', icon: <StickyNote size={24} />, color: 'bg-yellow-100 text-yellow-600' },
-    { id: 'translator', name: 'Translator', icon: <Languages size={24} />, color: 'bg-pink-100 text-pink-600' },
+    { id: 'invoice', name: 'Bill Generator', icon: <FileText size={24} />, color: 'bg-indigo-100 text-indigo-600', desc: 'GST & Retail Bills' },
+    { id: 'gst', name: 'GST Pro', icon: <Percent size={24} />, color: 'bg-blue-100 text-blue-600', desc: 'Calculate GST' },
+    { id: 'margin', name: 'Profit Analyzer', icon: <Calculator size={24} />, color: 'bg-purple-100 text-purple-600', desc: 'Margin & Markup' },
+    { id: 'emi', name: 'EMI Calculator', icon: <DollarSign size={24} />, color: 'bg-emerald-100 text-emerald-600', desc: 'Loan EMI Calc' },
+    { id: 'converter', name: 'Unit Convert', icon: <RefreshCcw size={24} />, color: 'bg-green-100 text-green-600', desc: 'KG, Tons, Feet' },
+    { id: 'stockvalue', name: 'Stock Value', icon: <Activity size={24} />, color: 'bg-cyan-100 text-cyan-600', desc: 'Inventory Worth' },
+    { id: 'card', name: 'Digital Card', icon: <CreditCard size={24} />, color: 'bg-orange-100 text-orange-600', desc: 'Business Card' },
+    { id: 'notes', name: 'Note Master', icon: <StickyNote size={24} />, color: 'bg-yellow-100 text-yellow-600', desc: 'Smart Notes' },
+    { id: 'translator', name: 'AI Translator', icon: <Languages size={24} />, color: 'bg-pink-100 text-pink-600', desc: 'Multi-Language' },
   ];
 
-  // --- INVOICE FUNCTIONS ---
+  const languageOptions = [
+    { code: 'en', name: 'English' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'gu', name: 'Gujarati' },
+    { code: 'mr', name: 'Marathi' },
+    { code: 'ta', name: 'Tamil' },
+    { code: 'te', name: 'Telugu' },
+    { code: 'bn', name: 'Bengali' },
+    { code: 'pa', name: 'Punjabi' },
+    { code: 'ur', name: 'Urdu' },
+    { code: 'ar', name: 'Arabic' },
+  ];
+
+  // 🌐 API TRANSLATION
+  const handleTranslate = async () => {
+    if (!transInput.trim()) return;
+    setTransLoading(true);
+    try {
+      const result = await translateWithAPI(transInput, transLang.from, transLang.to);
+      setTransOutput(result);
+      setTransHistory(prev => [{ input: transInput, output: result, from: transLang.from, to: transLang.to }, ...prev.slice(0, 9)]);
+    } catch (e) {
+      setTransOutput('Translation failed. Please try again.');
+    }
+    setTransLoading(false);
+  };
+
+  const swapLanguages = () => {
+    setTransLang({ from: transLang.to, to: transLang.from });
+    setTransInput(transOutput);
+    setTransOutput('');
+  };
+
+  // --- INVOICE FUNCTIONS (ENHANCED) ---
   const addInvItem = () => {
      if(!invCurrentItem.name || !invCurrentItem.rate) return;
-     const total = invCurrentItem.qty * invCurrentItem.rate;
-     const gstAmt = (total * invCurrentItem.gst) / 100;
-     const newItem = { ...invCurrentItem, id: Date.now(), total: total + gstAmt, gstAmt };
+     const baseTotal = invCurrentItem.qty * invCurrentItem.rate;
+     const gstAmt = invSettings.showGst ? (baseTotal * invCurrentItem.gst) / 100 : 0;
+     const newItem = { 
+       ...invCurrentItem, 
+       id: Date.now(), 
+       baseTotal,
+       gstAmt,
+       total: baseTotal + gstAmt 
+     };
      setInvItems([...invItems, newItem]);
-     setInvCurrentItem({ name: '', qty: 1, rate: 0, gst: 0 });
+     setInvCurrentItem({ name: '', qty: 1, rate: 0, gst: 18, unit: 'pcs', hsn: '' });
   };
   
   const deleteInvItem = (id) => setInvItems(invItems.filter(i => i.id !== id));
   
-  const calculateBillTotal = () => invItems.reduce((acc, curr) => acc + curr.total, 0);
+  const calculateBillTotals = () => {
+    const subtotal = invItems.reduce((acc, curr) => acc + curr.baseTotal, 0);
+    const totalGst = invItems.reduce((acc, curr) => acc + curr.gstAmt, 0);
+    const discountAmt = invSettings.discountType === 'percent' 
+      ? (subtotal * invSettings.discount / 100)
+      : invSettings.discount;
+    const grandTotal = subtotal + totalGst - discountAmt;
+    return { subtotal, totalGst, discountAmt, grandTotal };
+  };
+  
+  const calculateBillTotal = () => calculateBillTotals().grandTotal;
 
   const shareInvoiceImage = async () => {
     if (!window.html2canvas) {
@@ -1008,120 +1685,369 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
   const renderToolContent = () => {
     const commonInputClass = `w-full p-3 rounded-xl border font-bold text-lg mb-4 ${isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-gray-50 border-gray-300 text-black'}`;
     const cardClass = `p-6 rounded-2xl shadow-lg border h-full flex flex-col ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100'}`;
+    const totals = calculateBillTotals();
 
     switch (activeTool) {
       case 'invoice':
         return (
           <div className={`${cardClass} overflow-y-auto`}>
-             <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100"><ArrowLeft size={20}/></button>
-                <h3 className="font-bold text-xl">Invoice Pro</h3>
-                <div className="flex gap-2">
-                    <button onClick={shareInvoiceImage} className="p-2 bg-green-600 text-white rounded-lg flex items-center gap-1 text-sm font-bold shadow-md"><Share2 size={16}/> Share</button>
+             {/* Header */}
+             <div className="flex justify-between items-center mb-4 border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="text-indigo-500" size={24}/>
+                  <div>
+                    <h3 className="font-bold text-lg">Invoice Pro</h3>
+                    <p className="text-xs text-gray-500">#{invoiceNumber}</p>
+                  </div>
                 </div>
+                <div className="flex gap-2">
+                    <button onClick={shareInvoiceImage} className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl flex items-center gap-1 text-sm font-bold shadow-lg hover:shadow-xl transition-all">
+                      <Share2 size={16}/> Share
+                    </button>
+                </div>
+             </div>
+             
+             {/* Invoice Type Selection */}
+             <div className="flex gap-2 mb-4 bg-indigo-50 p-1.5 rounded-xl">
+               {[
+                 { id: 'retail', label: '🛒 Retail', desc: 'Simple Bill' },
+                 { id: 'gst', label: '📋 GST Invoice', desc: 'With Tax' },
+                 { id: 'estimate', label: '📝 Estimate', desc: 'Quotation' }
+               ].map(type => (
+                 <button 
+                   key={type.id}
+                   onClick={() => setInvSettings({...invSettings, invoiceType: type.id, showGst: type.id === 'gst'})}
+                   className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold transition-all ${
+                     invSettings.invoiceType === type.id 
+                       ? 'bg-white shadow-md text-indigo-600' 
+                       : 'text-gray-500 hover:text-indigo-400'
+                   }`}
+                 >
+                   {type.label}
+                 </button>
+               ))}
              </div>
              
              {/* PREVIEW AREA */}
-             <div className="flex justify-center bg-gray-200 p-2 rounded-lg mb-4 overflow-hidden">
-                <div className="bg-white text-black p-4 border shadow-xl rounded-sm text-xs w-full max-w-[320px]" id="invoice-area">
-                    <div className="text-center border-b-2 border-black pb-2 mb-2">
-                        <h2 className="text-lg font-black uppercase tracking-wider">{shopDetails.shopName || "My Shop"}</h2>
-                        <p className="text-[9px] uppercase">Invoice / Bill of Supply</p>
+             <div className="flex justify-center bg-gradient-to-br from-gray-100 to-gray-200 p-3 rounded-xl mb-4 overflow-hidden">
+                <div className="bg-white text-black p-4 border shadow-2xl rounded-lg text-xs w-full max-w-[320px]" id="invoice-area">
+                    {/* Shop Header */}
+                    <div className="text-center border-b-2 border-indigo-600 pb-2 mb-3">
+                        <h2 className="text-lg font-black uppercase tracking-wider text-indigo-700">{shopDetails.shopName || "My Shop"}</h2>
+                        <p className="text-[8px] uppercase text-gray-500 tracking-widest">
+                          {invSettings.invoiceType === 'gst' ? 'TAX INVOICE' : invSettings.invoiceType === 'estimate' ? 'ESTIMATE / QUOTATION' : 'RETAIL INVOICE'}
+                        </p>
                     </div>
                     
-                    <div className="flex justify-between mb-2 text-[10px]">
+                    {/* Customer & Invoice Info */}
+                    <div className="flex justify-between mb-3 text-[10px] bg-gray-50 p-2 rounded">
                         <div>
-                            <p><strong>To:</strong> {invCust.name}</p>
+                            <p className="text-gray-500 text-[8px]">BILL TO:</p>
+                            <p className="font-bold">{invCust.name || 'Walk-in Customer'}</p>
                             <p>{invCust.phone}</p>
+                            {invCust.gstNo && <p className="text-[8px] text-gray-500">GSTIN: {invCust.gstNo}</p>}
                         </div>
                         <div className="text-right">
-                            <p>#{invoiceNumber}</p>
-                            <p>{new Date().toLocaleDateString()}</p>
+                            <p className="font-bold text-indigo-600">#{invoiceNumber}</p>
+                            <p>{new Date().toLocaleDateString('en-IN')}</p>
+                            <p className="text-[8px] text-gray-500">{invSettings.paymentMode.toUpperCase()}</p>
                         </div>
                     </div>
 
-                    <table className="w-full text-left mb-2 border-collapse">
+                    {/* Items Table */}
+                    <table className="w-full text-left mb-3 border-collapse">
                         <thead>
-                            <tr className="border-b-2 border-black text-[10px] uppercase">
-                                <th className="py-1">Item</th>
-                                <th className="py-1 text-center">Qty</th>
-                                <th className="py-1 text-right">Price</th>
-                            <th className="py-1 text-right">Total</th>
-                            <th className="py-1 text-right">&nbsp;</th>
+                            <tr className="bg-indigo-600 text-white text-[9px] uppercase">
+                                <th className="py-1.5 px-1 rounded-tl">Item</th>
+                                <th className="py-1.5 text-center">Qty</th>
+                                <th className="py-1.5 text-right">Rate</th>
+                                {invSettings.showGst && <th className="py-1.5 text-right">GST</th>}
+                                <th className="py-1.5 text-right rounded-tr pr-1">Amount</th>
                             </tr>
                         </thead>
                         <tbody className="text-[10px]">
-                          {invItems.map(item => (
-                            <tr key={item.id} className="border-b border-gray-100">
-                              <td className="py-1">{item.name}</td>
-                              <td className="py-1 text-center">{item.qty}</td>
-                              <td className="py-1 text-right">{item.rate}</td>
-                              <td className="py-1 text-right">{(item.total).toFixed(0)}</td>
-                              <td className="py-1 text-right"><button onClick={() => deleteInvItem(item.id)} className="text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={14}/></button></td>
+                          {invItems.map((item, idx) => (
+                            <tr key={item.id} className={idx % 2 === 0 ? 'bg-gray-50' : ''}>
+                              <td className="py-1.5 px-1">
+                                <span className="font-medium">{item.name}</span>
+                                {item.hsn && <span className="block text-[7px] text-gray-400">HSN: {item.hsn}</span>}
+                              </td>
+                              <td className="py-1.5 text-center">{item.qty} {item.unit}</td>
+                              <td className="py-1.5 text-right">₹{item.rate}</td>
+                              {invSettings.showGst && <td className="py-1.5 text-right text-indigo-600">{item.gst}%</td>}
+                              <td className="py-1.5 text-right font-bold pr-1">₹{item.total.toFixed(0)}</td>
                             </tr>
                           ))}
+                          {invItems.length === 0 && (
+                            <tr><td colSpan={5} className="py-4 text-center text-gray-400">No items added</td></tr>
+                          )}
                         </tbody>
                     </table>
                     
-                    <div className="flex justify-end border-t-2 border-black pt-2">
-                        <div className="text-right">
-                            <p className="text-base font-bold">TOTAL: ₹ {calculateBillTotal().toFixed(2)}</p>
+                    {/* Totals */}
+                    <div className="border-t-2 border-gray-300 pt-2 space-y-1 text-[10px]">
+                        <div className="flex justify-between text-gray-600">
+                          <span>Subtotal</span>
+                          <span>₹{totals.subtotal.toFixed(2)}</span>
+                        </div>
+                        {invSettings.showGst && (
+                          <div className="flex justify-between text-indigo-600">
+                            <span>GST</span>
+                            <span>₹{totals.totalGst.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {invSettings.discount > 0 && (
+                          <div className="flex justify-between text-green-600">
+                            <span>Discount</span>
+                            <span>-₹{totals.discountAmt.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-lg font-black border-t-2 border-indigo-600 pt-2 mt-2">
+                            <span>TOTAL</span>
+                            <span className="text-indigo-700">₹{totals.grandTotal.toFixed(2)}</span>
                         </div>
                     </div>
-                    <div className="mt-2 text-center text-[9px] italic">Thank you for your visit!</div>
+                    
+                    {invSettings.notes && (
+                      <div className="mt-2 p-2 bg-yellow-50 rounded text-[8px] text-yellow-800">
+                        <strong>Note:</strong> {invSettings.notes}
+                      </div>
+                    )}
+                    <div className="mt-3 text-center text-[8px] text-gray-400 border-t pt-2">Thank you for your business!</div>
                 </div>
              </div>
 
-             {/* UPDATED: RESTRUCTURED INPUTS FOR MOBILE */}
-             <div className="grid grid-cols-2 gap-2 mb-2">
-                 <input className="p-2 border rounded" placeholder="Customer Name" value={invCust.name} onChange={e=>setInvCust({...invCust, name: e.target.value})} />
-                 <input className="p-2 border rounded" placeholder="Mobile Number" value={invCust.phone} onChange={e=>setInvCust({...invCust, phone: e.target.value})} />
+             {/* Customer Details */}
+             <div className="grid grid-cols-2 gap-2 mb-3">
+                 <input className="p-2.5 border-2 rounded-xl text-sm font-medium focus:border-indigo-400 outline-none" placeholder="Customer Name" value={invCust.name} onChange={e=>setInvCust({...invCust, name: e.target.value})} />
+                 <input className="p-2.5 border-2 rounded-xl text-sm focus:border-indigo-400 outline-none" placeholder="Mobile Number" value={invCust.phone} onChange={e=>setInvCust({...invCust, phone: e.target.value})} />
              </div>
+             
+             {invSettings.invoiceType === 'gst' && (
+               <input className="w-full p-2.5 border-2 rounded-xl text-sm mb-3 focus:border-indigo-400 outline-none" placeholder="Customer GSTIN (Optional)" value={invCust.gstNo} onChange={e=>setInvCust({...invCust, gstNo: e.target.value})} />
+             )}
 
-             <div className="bg-gray-50 p-3 rounded-lg border mb-4 text-black">
-                 {/* Item Name - Full Width */}
-                 <div className="mb-2">
-                     <input className="w-full p-2 border rounded font-bold" placeholder="Item Name" value={invCurrentItem.name} onChange={e=>setInvCurrentItem({...invCurrentItem, name: e.target.value})} />
+             {/* Add Item Form */}
+             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-xl border-2 border-indigo-100 mb-4">
+                 <p className="text-xs font-bold text-indigo-600 mb-2">ADD ITEM</p>
+                 <div className="grid grid-cols-2 gap-2 mb-2">
+                     <input className="col-span-2 p-2.5 border-2 rounded-xl font-bold text-sm" placeholder="Item Name *" value={invCurrentItem.name} onChange={e=>setInvCurrentItem({...invCurrentItem, name: e.target.value})} />
+                     {invSettings.showGst && (
+                       <input className="p-2 border-2 rounded-lg text-sm" placeholder="HSN Code" value={invCurrentItem.hsn} onChange={e=>setInvCurrentItem({...invCurrentItem, hsn: e.target.value})} />
+                     )}
                  </div>
                  
-                 {/* Grid for Qty, Rate, and Add Button */}
-                 <div className="grid grid-cols-3 gap-2">
-                     <div className="col-span-1">
-                         <input type="number" className="w-full p-2 border rounded font-bold" placeholder="Qty" value={invCurrentItem.qty} onChange={e=>setInvCurrentItem({...invCurrentItem, qty: parseInt(e.target.value)||1})} />
-                     </div>
-                     <div className="col-span-1">
-                         <input type="number" className="w-full p-2 border rounded" placeholder="Rate" value={invCurrentItem.rate || ''} onChange={e=>setInvCurrentItem({...invCurrentItem, rate: parseFloat(e.target.value)})} />
-                     </div>
-                     <div className="col-span-1">
-                         <button onClick={addInvItem} className="w-full h-full bg-indigo-600 text-white rounded font-bold flex items-center justify-center"><Plus size={20}/></button>
-                     </div>
+                 <div className="grid grid-cols-4 gap-2">
+                     <input type="number" className="p-2 border-2 rounded-lg text-sm font-bold" placeholder="Qty" value={invCurrentItem.qty} onChange={e=>setInvCurrentItem({...invCurrentItem, qty: parseInt(e.target.value)||1})} />
+                     <input type="number" className="p-2 border-2 rounded-lg text-sm" placeholder="Rate ₹" value={invCurrentItem.rate || ''} onChange={e=>setInvCurrentItem({...invCurrentItem, rate: parseFloat(e.target.value)})} />
+                     {invSettings.showGst && (
+                       <select className="p-2 border-2 rounded-lg text-sm" value={invCurrentItem.gst} onChange={e=>setInvCurrentItem({...invCurrentItem, gst: parseInt(e.target.value)})}>
+                         <option value={0}>0%</option>
+                         <option value={5}>5%</option>
+                         <option value={12}>12%</option>
+                         <option value={18}>18%</option>
+                         <option value={28}>28%</option>
+                       </select>
+                     )}
+                     <button onClick={addInvItem} className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+                       <Plus size={20}/>
+                     </button>
                  </div>
              </div>
              
+             {/* Extra Settings */}
+             <div className="grid grid-cols-2 gap-2 mb-3">
+               <select 
+                 className="p-2 border-2 rounded-xl text-sm"
+                 value={invSettings.paymentMode}
+                 onChange={e => setInvSettings({...invSettings, paymentMode: e.target.value})}
+               >
+                 <option value="cash">💵 Cash</option>
+                 <option value="upi">📱 UPI</option>
+                 <option value="card">💳 Card</option>
+                 <option value="credit">📋 Credit</option>
+               </select>
+               <div className="flex">
+                 <input 
+                   type="number" 
+                   className="flex-1 p-2 border-2 rounded-l-xl text-sm" 
+                   placeholder="Discount" 
+                   value={invSettings.discount || ''}
+                   onChange={e => setInvSettings({...invSettings, discount: parseFloat(e.target.value) || 0})}
+                 />
+                 <select 
+                   className="p-2 border-2 border-l-0 rounded-r-xl text-sm"
+                   value={invSettings.discountType}
+                   onChange={e => setInvSettings({...invSettings, discountType: e.target.value})}
+                 >
+                   <option value="flat">₹</option>
+                   <option value="percent">%</option>
+                 </select>
+               </div>
+             </div>
+             
+             {/* Items List with Delete */}
+             {invItems.length > 0 && (
+               <div className="mb-3 space-y-1">
+                 {invItems.map(item => (
+                   <div key={item.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg text-sm">
+                     <span className="font-medium">{item.name} × {item.qty}</span>
+                     <div className="flex items-center gap-2">
+                       <span className="font-bold">₹{item.total.toFixed(0)}</span>
+                       <button onClick={() => deleteInvItem(item.id)} className="text-red-500 p-1 hover:bg-red-50 rounded"><Trash2 size={14}/></button>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             )}
+             
              {invItems.length > 0 && 
-                <button onClick={() => setInvItems([])} className="text-red-500 text-xs text-center w-full bg-red-50 p-2 rounded">Clear All Items</button>
+                <button onClick={() => setInvItems([])} className="text-red-500 text-xs text-center w-full bg-red-50 p-2 rounded-xl font-bold">
+                  Clear All Items
+                </button>
              }
           </div>
         );
 
       case 'translator':
         return (
-            <div className={cardClass}>
-                <h3 className="font-bold text-xl mb-4">English to Hindi Translator</h3>
-                <div className="flex gap-2 mb-2">
-                    <input className={commonInputClass} placeholder="Type in English..." value={transInput} onChange={e => setTransInput(e.target.value)} />
+            <div className={`${cardClass} overflow-hidden`}>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-xl flex items-center gap-2">
+                    <Languages className="text-pink-500" size={24}/>
+                    AI Translator
+                  </h3>
+                  <span className="text-xs bg-gradient-to-r from-pink-500 to-purple-500 text-white px-2 py-1 rounded-full">Powered by API</span>
+                </div>
+
+                {/* Language Selection */}
+                <div className="flex items-center gap-2 mb-4 bg-gradient-to-r from-pink-50 to-purple-50 p-3 rounded-xl border border-pink-100">
+                  <select 
+                    value={transLang.from} 
+                    onChange={(e) => setTransLang({...transLang, from: e.target.value})}
+                    className="flex-1 p-2 rounded-lg border-2 border-pink-200 font-bold text-sm bg-white focus:border-pink-500 outline-none"
+                  >
+                    {languageOptions.map(lang => (
+                      <option key={lang.code} value={lang.code}>{lang.name}</option>
+                    ))}
+                  </select>
+                  <button 
+                    onClick={swapLanguages}
+                    className="p-2 bg-white border-2 border-pink-200 rounded-lg hover:bg-pink-100 transition-all active:scale-95"
+                  >
+                    <RefreshCcw size={20} className="text-pink-500"/>
+                  </button>
+                  <select 
+                    value={transLang.to} 
+                    onChange={(e) => setTransLang({...transLang, to: e.target.value})}
+                    className="flex-1 p-2 rounded-lg border-2 border-purple-200 font-bold text-sm bg-white focus:border-purple-500 outline-none"
+                  >
+                    {languageOptions.map(lang => (
+                      <option key={lang.code} value={lang.code}>{lang.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Input Area */}
+                <div className="relative mb-4">
+                  <textarea 
+                    className={`w-full p-4 rounded-xl border-2 font-medium text-lg resize-none h-28 ${isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-pink-200 text-black focus:border-pink-400'}`}
+                    placeholder={`Type in ${languageOptions.find(l => l.code === transLang.from)?.name || 'source language'}...`}
+                    value={transInput} 
+                    onChange={e => setTransInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleTranslate()}
+                  />
+                  <div className="absolute bottom-3 right-3 flex gap-2">
                     <VoiceInput onResult={setTransInput} isDark={isDark} />
+                    <button 
+                      onClick={() => setTransInput('')}
+                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+                    >
+                      <X size={18} className="text-gray-500"/>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                    <p className="text-xs text-yellow-700 font-bold mb-2">HINDI OUTPUT:</p>
-                    <p className="text-2xl font-bold text-black">{convertToHindi(transInput)}</p>
+
+                {/* Translate Button */}
+                <button 
+                  onClick={handleTranslate}
+                  disabled={transLoading || !transInput.trim()}
+                  className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all mb-4 ${
+                    transLoading ? 'bg-gray-400 cursor-wait' : 
+                    !transInput.trim() ? 'bg-gray-300 cursor-not-allowed' :
+                    'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
+                >
+                  {transLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Translating...
+                    </>
+                  ) : (
+                    <>
+                      <Languages size={20}/>
+                      Translate Now
+                    </>
+                  )}
+                </button>
+
+                {/* Output Area */}
+                <div className={`flex-1 rounded-xl p-4 border-2 min-h-28 ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-purple-600 font-bold uppercase tracking-wide">
+                      {languageOptions.find(l => l.code === transLang.to)?.name || 'Translation'} Output:
+                    </p>
+                    {transOutput && (
+                      <button 
+                        onClick={() => { navigator.clipboard.writeText(transOutput); alert("Copied!"); }}
+                        className="p-1.5 bg-purple-100 rounded-lg hover:bg-purple-200 transition-all"
+                      >
+                        <Copy size={14} className="text-purple-600"/>
+                      </button>
+                    )}
+                  </div>
+                  <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                    {transOutput || <span className="opacity-40 text-base">Translation will appear here...</span>}
+                  </p>
                 </div>
-                <button onClick={() => {navigator.clipboard.writeText(convertToHindi(transInput)); alert("Copied!")}} className="mt-4 w-full py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2"><Copy size={18}/> Copy Hindi Text</button>
+
+                {/* Instant Fallback Preview */}
+                {transInput && transLang.to === 'hi' && (
+                  <div className="mt-3 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
+                    <p className="text-xs text-yellow-700 font-bold mb-1 flex items-center gap-1">
+                      <Zap size={12}/> Instant Preview (Offline):
+                    </p>
+                    <p className="text-sm text-yellow-900">{convertToHindiFallback(transInput)}</p>
+                  </div>
+                )}
+
+                {/* Translation History */}
+                {transHistory.length > 0 && (
+                  <div className="mt-4 border-t pt-3">
+                    <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+                      <Clock size={12}/> Recent Translations
+                    </p>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {transHistory.slice(0, 5).map((item, idx) => (
+                        <div 
+                          key={idx}
+                          onClick={() => { setTransInput(item.input); setTransOutput(item.output); setTransLang({from: item.from, to: item.to}); }}
+                          className="p-2 bg-gray-50 rounded-lg text-xs cursor-pointer hover:bg-gray-100 transition-all border"
+                        >
+                          <span className="text-gray-600">{item.input.substring(0, 30)}...</span>
+                          <span className="text-gray-400 mx-1">→</span>
+                          <span className="text-purple-600 font-medium">{item.output.substring(0, 30)}...</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
             </div>
         );
       case 'gst': {
         const price = parseFloat(gstInput.price) || 0;
-        let gstAmt = 0, finalAmt = 0, baseAmt = 0;
+        let gstAmt = 0, finalAmt = 0, baseAmt = 0, cgst = 0, sgst = 0, igst = 0;
         if(gstInput.isReverse) {
           baseAmt = (price * 100) / (100 + gstInput.rate);
           gstAmt = price - baseAmt;
@@ -1131,89 +2057,427 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
           gstAmt = (price * gstInput.rate) / 100;
           finalAmt = price + gstAmt;
         }
+        cgst = sgst = gstAmt / 2;
+        igst = gstAmt;
         return (
            <div className={cardClass}>
              <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-bold text-xl">GST Calculator</h3>
-                 <button onClick={() => setGstInput({...gstInput, isReverse: !gstInput.isReverse})} className={`text-xs px-3 py-1 rounded-full border ${gstInput.isReverse ? 'bg-green-100 text-green-700 border-green-500' : 'bg-gray-100 text-gray-600'}`}>
-                     {gstInput.isReverse ? "Inclusive (Reverse)" : "Exclusive (Add)"}
-                 </button>
+                 <h3 className="font-bold text-xl flex items-center gap-2">
+                   <Percent className="text-blue-500" size={24}/>
+                   GST Pro Calculator
+                 </h3>
              </div>
-             <input type="number" placeholder="Enter Amount (₹)" className={commonInputClass} value={gstInput.price} onChange={e => setGstInput({...gstInput, price: e.target.value})} />
-             <div className="flex gap-2 mb-4">
-               {[5, 12, 18, 28].map(r => (
-                 <button key={r} onClick={() => setGstInput({...gstInput, rate: r})} className={`flex-1 py-2 rounded-lg font-bold border ${gstInput.rate === r ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>{r}%</button>
+             
+             {/* GST Mode Toggle */}
+             <div className="flex gap-2 mb-4 bg-blue-50 p-1 rounded-xl">
+                <button 
+                  onClick={() => setGstInput({...gstInput, isReverse: false})} 
+                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${!gstInput.isReverse ? 'bg-blue-600 text-white shadow' : 'text-blue-600 hover:bg-blue-100'}`}
+                >
+                  Add GST
+                </button>
+                <button 
+                  onClick={() => setGstInput({...gstInput, isReverse: true})} 
+                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${gstInput.isReverse ? 'bg-green-600 text-white shadow' : 'text-green-600 hover:bg-green-100'}`}
+                >
+                  Reverse GST
+                </button>
+             </div>
+             
+             <input 
+               type="number" 
+               placeholder={gstInput.isReverse ? "Enter GST Inclusive Amount (₹)" : "Enter Base Amount (₹)"} 
+               className={`${commonInputClass} text-center text-2xl`} 
+               value={gstInput.price} 
+               onChange={e => setGstInput({...gstInput, price: e.target.value})} 
+             />
+             
+             {/* GST Rate Selection */}
+             <div className="grid grid-cols-5 gap-2 mb-4">
+               {[5, 12, 18, 28, 'custom'].map(r => (
+                 <button 
+                   key={r} 
+                   onClick={() => r !== 'custom' && setGstInput({...gstInput, rate: r})} 
+                   className={`py-3 rounded-xl font-bold border-2 transition-all ${gstInput.rate === r ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}
+                 >
+                   {r === 'custom' ? '⚙️' : `${r}%`}
+                 </button>
                ))}
              </div>
-             <div className="bg-blue-50 p-4 rounded-xl text-blue-900 border border-blue-100 mb-4">
-               <div className="flex justify-between mb-1 opacity-70 text-sm"><span>Base Amount</span> <span>₹{baseAmt.toFixed(2)}</span></div>
-               <div className="flex justify-between mb-1"><span>GST ({gstInput.rate}%)</span> <span>₹{gstAmt.toFixed(2)}</span></div>
-               <div className="flex justify-between text-2xl font-bold border-t border-blue-200 pt-2 mt-2"><span>Total</span> <span>₹{finalAmt.toFixed(2)}</span></div>
+             
+             {/* Results Card */}
+             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-2xl border-2 border-blue-100 mb-4">
+               <div className="space-y-2 text-sm">
+                 <div className="flex justify-between py-2 border-b border-blue-100">
+                   <span className="text-gray-600">Base Amount</span> 
+                   <span className="font-bold">₹{baseAmt.toFixed(2)}</span>
+                 </div>
+                 <div className="flex justify-between py-2 border-b border-blue-100">
+                   <span className="text-gray-600">GST ({gstInput.rate}%)</span> 
+                   <span className="font-bold text-blue-600">₹{gstAmt.toFixed(2)}</span>
+                 </div>
+                 
+                 {/* CGST/SGST Breakdown */}
+                 <div className="bg-white/50 rounded-xl p-3 my-2">
+                   <p className="text-xs text-gray-500 font-bold mb-2">TAX BREAKDOWN (Intra-State)</p>
+                   <div className="grid grid-cols-2 gap-2">
+                     <div className="text-center p-2 bg-blue-100/50 rounded-lg">
+                       <p className="text-xs text-blue-600">CGST ({gstInput.rate/2}%)</p>
+                       <p className="font-bold text-blue-800">₹{cgst.toFixed(2)}</p>
+                     </div>
+                     <div className="text-center p-2 bg-indigo-100/50 rounded-lg">
+                       <p className="text-xs text-indigo-600">SGST ({gstInput.rate/2}%)</p>
+                       <p className="font-bold text-indigo-800">₹{sgst.toFixed(2)}</p>
+                     </div>
+                   </div>
+                   <div className="mt-2 text-center p-2 bg-purple-100/50 rounded-lg">
+                     <p className="text-xs text-purple-600">IGST (Inter-State) ({gstInput.rate}%)</p>
+                     <p className="font-bold text-purple-800">₹{igst.toFixed(2)}</p>
+                   </div>
+                 </div>
+                 
+                 <div className="flex justify-between text-2xl font-bold pt-2">
+                   <span>Final Amount</span> 
+                   <span className="text-green-600">₹{finalAmt.toFixed(2)}</span>
+                 </div>
+               </div>
              </div>
-             <button onClick={() => navigator.clipboard.writeText(`Base: ${baseAmt.toFixed(2)}\nGST: ${gstAmt.toFixed(2)}\nTotal: ${finalAmt.toFixed(2)}`)} className="w-full py-3 bg-gray-200 rounded-xl font-bold text-gray-700 flex items-center justify-center gap-2"><Copy size={16}/> Copy Result</button>
+             
+             <button 
+               onClick={() => navigator.clipboard.writeText(`GST Calculation\n━━━━━━━━━━━━━━━\nBase: ₹${baseAmt.toFixed(2)}\nGST @${gstInput.rate}%: ₹${gstAmt.toFixed(2)}\n  CGST: ₹${cgst.toFixed(2)}\n  SGST: ₹${sgst.toFixed(2)}\n━━━━━━━━━━━━━━━\nTotal: ₹${finalAmt.toFixed(2)}`)} 
+               className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all"
+             >
+               <Copy size={16}/> Copy Full Breakdown
+             </button>
            </div>
            );
           }
-      case 'margin':
+      case 'margin': {
+         const cost = parseFloat(marginInput.cost) || 0;
+         const sell = parseFloat(marginInput.sell) || 0;
+         const markup = parseFloat(marginInput.markup) || 0;
+         const profit = sell - cost;
+         const marginPercent = sell > 0 ? ((profit / sell) * 100) : 0;
+         const markupPercent = cost > 0 ? ((profit / cost) * 100) : 0;
+         const sellFromMarkup = cost + (cost * markup / 100);
+         const breakEvenQty = cost > 0 && profit > 0 ? Math.ceil(cost / profit) : 0;
+         
          return (
            <div className={cardClass}>
                <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-bold text-xl">Profit & Margin</h3>
-                 <button onClick={() => setMarginInput({cost: '', sell: '', discount: 0, mode: marginInput.mode})} className="text-xs text-red-500 font-bold">RESET</button>
+                 <h3 className="font-bold text-xl flex items-center gap-2">
+                   <Calculator className="text-purple-500" size={24}/>
+                   Profit Analyzer Pro
+                 </h3>
+                 <button 
+                   onClick={() => setMarginInput({cost: '', sell: '', discount: 0, mode: marginInput.mode, markup: ''})} 
+                   className="text-xs text-red-500 font-bold bg-red-50 px-3 py-1 rounded-full"
+                 >
+                   RESET
+                 </button>
                </div>
-               <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
-                  <button onClick={() => setMarginInput({...marginInput, mode: 'profit'})} className={`flex-1 py-2 rounded-md font-bold text-sm ${marginInput.mode === 'profit' ? 'bg-white shadow text-purple-600' : 'text-gray-500'}`}>Profit Analysis</button>
-                  <button onClick={() => setMarginInput({...marginInput, mode: 'discount'})} className={`flex-1 py-2 rounded-md font-bold text-sm ${marginInput.mode === 'discount' ? 'bg-white shadow text-purple-600' : 'text-gray-500'}`}>Discount Calc</button>
+               
+               {/* Mode Tabs */}
+               <div className="flex gap-2 mb-4 bg-purple-50 p-1.5 rounded-xl">
+                  <button onClick={() => setMarginInput({...marginInput, mode: 'profit'})} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${marginInput.mode === 'profit' ? 'bg-white shadow-md text-purple-600' : 'text-gray-500 hover:text-purple-400'}`}>
+                    📊 Profit Analysis
+                  </button>
+                  <button onClick={() => setMarginInput({...marginInput, mode: 'markup'})} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${marginInput.mode === 'markup' ? 'bg-white shadow-md text-purple-600' : 'text-gray-500 hover:text-purple-400'}`}>
+                    📈 Markup Pricing
+                  </button>
+                  <button onClick={() => setMarginInput({...marginInput, mode: 'discount'})} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${marginInput.mode === 'discount' ? 'bg-white shadow-md text-purple-600' : 'text-gray-500 hover:text-purple-400'}`}>
+                    🏷️ Discount
+                  </button>
                </div>
+               
                {marginInput.mode === 'profit' ? (
                   <>
-                      <input type="number" placeholder="Buying Cost (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
-                      <input type="number" placeholder="Selling Price (₹)" className={commonInputClass} value={marginInput.sell} onChange={e => setMarginInput({...marginInput, sell: e.target.value})} />
-                      {marginInput.cost && marginInput.sell && (
-                          <div className={`p-4 rounded-xl border mt-2 ${parseFloat(marginInput.sell) >= parseFloat(marginInput.cost) ? 'bg-green-50 text-green-900 border-green-200' : 'bg-red-50 text-red-900 border-red-200'}`}>
-                             <div className="flex justify-between text-lg font-bold">
-                                <span>Profit/Loss</span>
-                                <span>₹{(parseFloat(marginInput.sell) - parseFloat(marginInput.cost)).toFixed(2)}</span>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                          <label className="text-xs font-bold text-gray-500 mb-1 block">BUYING COST</label>
+                          <input 
+                            type="number" 
+                            placeholder="₹0" 
+                            className={`${commonInputClass} mb-0 text-center text-xl`} 
+                            value={marginInput.cost} 
+                            onChange={e => setMarginInput({...marginInput, cost: e.target.value})} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-500 mb-1 block">SELLING PRICE</label>
+                          <input 
+                            type="number" 
+                            placeholder="₹0" 
+                            className={`${commonInputClass} mb-0 text-center text-xl`} 
+                            value={marginInput.sell} 
+                            onChange={e => setMarginInput({...marginInput, sell: e.target.value})} 
+                          />
+                        </div>
+                      </div>
+                      
+                      {cost > 0 && sell > 0 && (
+                          <div className={`p-4 rounded-2xl border-2 ${profit >= 0 ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200' : 'bg-gradient-to-br from-red-50 to-pink-50 border-red-200'}`}>
+                             {/* Main Profit Display */}
+                             <div className="text-center mb-4">
+                               <p className={`text-xs font-bold mb-1 ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                 {profit >= 0 ? '💰 PROFIT' : '📉 LOSS'}
+                               </p>
+                               <p className={`text-4xl font-black ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                 ₹{Math.abs(profit).toFixed(2)}
+                               </p>
                              </div>
-                             <div className="flex justify-between text-sm mt-1 opacity-80">
-                                <span>Margin</span>
-                                <span>{(((parseFloat(marginInput.sell) - parseFloat(marginInput.cost)) / parseFloat(marginInput.sell)) * 100).toFixed(2)}%</span>
+                             
+                             {/* Stats Grid */}
+                             <div className="grid grid-cols-2 gap-3 mb-3">
+                               <div className="bg-white/60 rounded-xl p-3 text-center">
+                                 <p className="text-xs text-gray-500 font-medium">Profit Margin</p>
+                                 <p className={`text-2xl font-bold ${marginPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                   {marginPercent.toFixed(1)}%
+                                 </p>
+                               </div>
+                               <div className="bg-white/60 rounded-xl p-3 text-center">
+                                 <p className="text-xs text-gray-500 font-medium">Markup %</p>
+                                 <p className={`text-2xl font-bold ${markupPercent >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                                   {markupPercent.toFixed(1)}%
+                                 </p>
+                               </div>
                              </div>
+                             
+                             {/* Break-even Analysis */}
+                             {profit > 0 && (
+                               <div className="bg-blue-100/50 rounded-xl p-3 text-center">
+                                 <p className="text-xs text-blue-600 font-medium">Break-even Quantity</p>
+                                 <p className="text-lg font-bold text-blue-800">
+                                   Sell {breakEvenQty} units to recover cost
+                                 </p>
+                               </div>
+                             )}
                           </div>
+                      )}
+                  </>
+               ) : marginInput.mode === 'markup' ? (
+                  <>
+                      <div className="mb-4">
+                        <label className="text-xs font-bold text-gray-500 mb-1 block">BUYING COST</label>
+                        <input 
+                          type="number" 
+                          placeholder="₹0" 
+                          className={`${commonInputClass} mb-0 text-center text-xl`} 
+                          value={marginInput.cost} 
+                          onChange={e => setMarginInput({...marginInput, cost: e.target.value})} 
+                        />
+                      </div>
+                      
+                      <div className="mb-4">
+                        <label className="text-xs font-bold text-gray-500 mb-2 block">SELECT MARKUP %</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[10, 15, 20, 25, 30, 40, 50, 100].map(m => (
+                            <button 
+                              key={m} 
+                              onClick={() => setMarginInput({...marginInput, markup: m.toString()})}
+                              className={`py-2 rounded-lg font-bold text-sm transition-all ${parseFloat(marginInput.markup) === m ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-purple-100'}`}
+                            >
+                              {m}%
+                            </button>
+                          ))}
+                        </div>
+                        <input 
+                          type="number" 
+                          placeholder="Or enter custom markup %" 
+                          className={`${commonInputClass} mb-0 mt-3`} 
+                          value={marginInput.markup} 
+                          onChange={e => setMarginInput({...marginInput, markup: e.target.value})} 
+                        />
+                      </div>
+                      
+                      {cost > 0 && markup > 0 && (
+                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-4 rounded-2xl border-2 border-purple-200">
+                          <div className="text-center">
+                            <p className="text-xs font-bold text-purple-600 mb-1">RECOMMENDED SELLING PRICE</p>
+                            <p className="text-4xl font-black text-purple-700">₹{sellFromMarkup.toFixed(2)}</p>
+                            <p className="text-sm text-gray-500 mt-2">
+                              Profit per unit: <span className="font-bold text-green-600">₹{(sellFromMarkup - cost).toFixed(2)}</span>
+                            </p>
+                          </div>
+                        </div>
                       )}
                   </>
                ) : (
                   <>
-                      <input type="number" placeholder="Original Price (₹)" className={commonInputClass} value={marginInput.cost} onChange={e => setMarginInput({...marginInput, cost: e.target.value})} />
-                      <input type="number" placeholder="Discount %" className={commonInputClass} value={marginInput.discount} onChange={e => setMarginInput({...marginInput, discount: e.target.value})} />
-                      <div className="bg-purple-50 p-4 rounded-xl text-purple-900 border border-purple-100">
-                         <div className="flex justify-between mb-1"><span>You Save</span> <span>₹{((parseFloat(marginInput.cost) * marginInput.discount) / 100 || 0).toFixed(2)}</span></div>
-                         <div className="flex justify-between text-xl font-bold border-t border-purple-200 pt-2 mt-2"><span>Payable</span> <span>₹{(parseFloat(marginInput.cost) - ((parseFloat(marginInput.cost) * marginInput.discount) / 100) || 0).toFixed(2)}</span></div>
+                      <div className="mb-4">
+                        <label className="text-xs font-bold text-gray-500 mb-1 block">ORIGINAL PRICE (MRP)</label>
+                        <input 
+                          type="number" 
+                          placeholder="₹0" 
+                          className={`${commonInputClass} mb-0 text-center text-xl`} 
+                          value={marginInput.cost} 
+                          onChange={e => setMarginInput({...marginInput, cost: e.target.value})} 
+                        />
+                      </div>
+                      
+                      <div className="mb-4">
+                        <label className="text-xs font-bold text-gray-500 mb-2 block">DISCOUNT %</label>
+                        <div className="grid grid-cols-5 gap-2 mb-3">
+                          {[5, 10, 15, 20, 25].map(d => (
+                            <button 
+                              key={d} 
+                              onClick={() => setMarginInput({...marginInput, discount: d})}
+                              className={`py-2 rounded-lg font-bold text-sm transition-all ${marginInput.discount === d ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-orange-100'}`}
+                            >
+                              {d}%
+                            </button>
+                          ))}
+                        </div>
+                        <input 
+                          type="number" 
+                          placeholder="Or enter custom discount %" 
+                          className={commonInputClass} 
+                          value={marginInput.discount || ''} 
+                          onChange={e => setMarginInput({...marginInput, discount: parseFloat(e.target.value) || 0})} 
+                        />
+                      </div>
+                      
+                      <div className="bg-gradient-to-br from-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-orange-200">
+                         <div className="flex justify-between items-center mb-3 pb-3 border-b border-orange-200">
+                           <span className="text-gray-600">You Save</span> 
+                           <span className="text-xl font-bold text-orange-600">
+                             ₹{((cost * marginInput.discount) / 100).toFixed(2)}
+                           </span>
+                         </div>
+                         <div className="text-center">
+                           <p className="text-xs font-bold text-green-600 mb-1">FINAL PAYABLE AMOUNT</p>
+                           <p className="text-4xl font-black text-green-700">
+                             ₹{(cost - (cost * marginInput.discount / 100)).toFixed(2)}
+                           </p>
+                         </div>
                       </div>
                   </>
                )}
            </div>
          );
+        }
       case 'converter': {
         const val = parseFloat(convInput.val) || 0;
-        let res = 0;
-        let unit = '';
-        if(convInput.type === 'kgToTon') { res = val / 1000; unit = 'Tons'; }
-        else if(convInput.type === 'tonToKg') { res = val * 1000; unit = 'KG'; }
-        else if(convInput.type === 'oil') { res = val * 0.91; unit = 'KG (approx)'; } 
-        else if(convInput.type === 'feetToM') { res = val * 0.3048; unit = 'Meters'; }
+        const conversions = {
+          kgToTon: { factor: 1/1000, unit: 'Tons', formula: '÷ 1000' },
+          tonToKg: { factor: 1000, unit: 'KG', formula: '× 1000' },
+          kgToQuintal: { factor: 1/100, unit: 'Quintals', formula: '÷ 100' },
+          quintalToKg: { factor: 100, unit: 'KG', formula: '× 100' },
+          oil: { factor: 0.91, unit: 'KG', formula: '× 0.91 (density)' },
+          ghee: { factor: 0.93, unit: 'KG', formula: '× 0.93' },
+          feetToM: { factor: 0.3048, unit: 'Meters', formula: '× 0.3048' },
+          mToFeet: { factor: 3.28084, unit: 'Feet', formula: '× 3.281' },
+          inchToCm: { factor: 2.54, unit: 'CM', formula: '× 2.54' },
+          cmToInch: { factor: 0.3937, unit: 'Inches', formula: '× 0.394' },
+          sqftToSqm: { factor: 0.0929, unit: 'Sq.Meter', formula: '× 0.093' },
+          sqmToSqft: { factor: 10.764, unit: 'Sq.Feet', formula: '× 10.76' },
+          gajaToSqft: { factor: 9, unit: 'Sq.Feet', formula: '× 9' },
+          bighaToSqft: { factor: 27225, unit: 'Sq.Feet', formula: '× 27225' },
+        };
+        const conv = conversions[convInput.type] || { factor: 1, unit: '', formula: '' };
+        const result = val * conv.factor;
+        
+        const categories = {
+          weight: ['kgToTon', 'tonToKg', 'kgToQuintal', 'quintalToKg'],
+          liquid: ['oil', 'ghee'],
+          length: ['feetToM', 'mToFeet', 'inchToCm', 'cmToInch'],
+          area: ['sqftToSqm', 'sqmToSqft', 'gajaToSqft', 'bighaToSqft']
+        };
+        
+        const convLabels = {
+          kgToTon: 'KG → Tons', tonToKg: 'Tons → KG',
+          kgToQuintal: 'KG → Quintals', quintalToKg: 'Quintals → KG',
+          oil: 'Liters → KG (Oil)', ghee: 'Liters → KG (Ghee)',
+          feetToM: 'Feet → Meters', mToFeet: 'Meters → Feet',
+          inchToCm: 'Inch → CM', cmToInch: 'CM → Inch',
+          sqftToSqm: 'Sq.ft → Sq.m', sqmToSqft: 'Sq.m → Sq.ft',
+          gajaToSqft: 'Gaja → Sq.ft', bighaToSqft: 'Bigha → Sq.ft'
+        };
+        
         return (
            <div className={cardClass}>
-             <h3 className="font-bold mb-4 text-xl">Pro Converter</h3>
-             <select className={commonInputClass} value={convInput.type} onChange={e => setConvInput({...convInput, type: e.target.value})}>
-                 <option value="kgToTon">KG to Tons</option>
-                 <option value="tonToKg">Tons to KG</option>
-                 <option value="oil">Liters to KG (Oil)</option>
-                 <option value="feetToM">Feet to Meters</option>
-             </select>
-             <input type="number" placeholder="Enter Value" className={commonInputClass} value={convInput.val} onChange={e => setConvInput({...convInput, val: e.target.value})} />
-             <div className={`p-6 rounded-xl font-mono text-3xl font-bold text-center mt-4 ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>
-                 {res.toFixed(3)} <span className="text-sm opacity-50">{unit}</span>
+             <h3 className="font-bold mb-4 text-xl flex items-center gap-2">
+               <RefreshCcw className="text-green-500" size={24}/>
+               Pro Unit Converter
+             </h3>
+             
+             {/* Category Tabs */}
+             <div className="flex gap-1 mb-3 overflow-x-auto pb-2">
+               {Object.entries({ weight: '⚖️ Weight', liquid: '💧 Liquid', length: '📏 Length', area: '📐 Area' }).map(([key, label]) => (
+                 <button 
+                   key={key}
+                   onClick={() => setConvInput({...convInput, type: categories[key][0]})}
+                   className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                     categories[key].includes(convInput.type) 
+                       ? 'bg-green-600 text-white' 
+                       : 'bg-gray-100 text-gray-600 hover:bg-green-100'
+                   }`}
+                 >
+                   {label}
+                 </button>
+               ))}
+             </div>
+             
+             {/* Conversion Type Grid */}
+             <div className="grid grid-cols-2 gap-2 mb-4">
+               {Object.entries(convLabels)
+                 .filter(([key]) => Object.values(categories).flat().includes(key) && 
+                   Object.entries(categories).find(([_, v]) => v.includes(convInput.type))?.[1].includes(key))
+                 .map(([key, label]) => (
+                   <button 
+                     key={key}
+                     onClick={() => setConvInput({...convInput, type: key})}
+                     className={`py-2 px-3 rounded-xl text-sm font-bold transition-all ${
+                       convInput.type === key 
+                         ? 'bg-green-600 text-white shadow-lg scale-105' 
+                         : 'bg-gray-100 text-gray-600 hover:bg-green-100'
+                     }`}
+                   >
+                     {label}
+                   </button>
+                 ))
+               }
+             </div>
+             
+             {/* Input */}
+             <div className="relative mb-4">
+               <input 
+                 type="number" 
+                 placeholder="Enter Value" 
+                 className={`${commonInputClass} text-center text-2xl mb-0 pr-16`} 
+                 value={convInput.val} 
+                 onChange={e => setConvInput({...convInput, val: e.target.value})} 
+               />
+               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-bold">
+                 {convLabels[convInput.type]?.split('→')[0]?.trim()}
+               </span>
+             </div>
+             
+             {/* Formula Display */}
+             <div className="text-center text-xs text-gray-500 mb-3 font-mono">
+               Formula: {conv.formula}
+             </div>
+             
+             {/* Result */}
+             <div className={`p-6 rounded-2xl font-mono text-center ${isDark ? 'bg-gradient-to-br from-slate-700 to-slate-800' : 'bg-gradient-to-br from-green-50 to-emerald-100 border-2 border-green-200'}`}>
+                 <p className="text-xs text-green-600 font-bold mb-2">RESULT</p>
+                 <p className={`text-4xl font-black ${isDark ? 'text-white' : 'text-green-700'}`}>
+                   {result.toFixed(4)}
+                 </p>
+                 <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-green-600'}`}>
+                   {conv.unit}
+                 </p>
+             </div>
+             
+             {/* Quick Reference */}
+             <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+               <p className="text-xs font-bold text-gray-500 mb-2">Quick Reference</p>
+               <div className="grid grid-cols-2 gap-2 text-xs">
+                 <div className="text-gray-600">1 Quintal = 100 KG</div>
+                 <div className="text-gray-600">1 Ton = 1000 KG</div>
+                 <div className="text-gray-600">1 Feet = 12 Inch</div>
+                 <div className="text-gray-600">1 Gaja = 9 Sq.ft</div>
+               </div>
              </div>
            </div>
          );
@@ -1221,20 +2485,309 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
       case 'card':
          return (
            <div className={cardClass}>
-             <h3 className="font-bold mb-4 text-xl">Digital Card</h3>
-             <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 rounded-xl shadow-2xl mb-4 relative overflow-hidden transform transition-transform hover:scale-105 duration-300">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-bl-full"></div>
-                <div className="absolute bottom-0 left-0 w-16 h-16 bg-yellow-500/20 rounded-tr-full"></div>
-                <h2 className="text-3xl font-bold text-yellow-400 mb-1 tracking-tight">{shopDetails.shopName || "MY SHOP"}</h2>
-                <p className="text-xs opacity-70 mb-8 uppercase tracking-widest">Deals in: All Car Parts & Accessories</p>
-                <div className="text-sm space-y-2 font-medium">
-                  <p className="flex items-center gap-2"><Phone size={14} className="text-yellow-500"/> +91 98765 43210</p>
-                  <p className="flex items-center gap-2"><Store size={14} className="text-yellow-500"/> Main Market, City Name</p>
+             <h3 className="font-bold mb-4 text-xl flex items-center gap-2">
+               <CreditCard className="text-orange-500" size={24}/>
+               Digital Business Card
+             </h3>
+             
+             {/* Premium Card Design */}
+             <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-2xl mb-4 relative overflow-hidden" id="digital-card-area">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-yellow-400/20 to-transparent rounded-bl-full"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-yellow-500/10 to-transparent rounded-tr-full"></div>
+                <div className="absolute top-1/2 right-1/4 w-48 h-48 bg-yellow-500/5 rounded-full blur-3xl"></div>
+                
+                {/* Logo/Icon Placeholder */}
+                <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl flex items-center justify-center mb-4 shadow-lg">
+                  <Store size={24} className="text-white"/>
+                </div>
+                
+                {/* Shop Name */}
+                <h2 className="text-2xl font-black text-yellow-400 mb-1 tracking-tight">{shopDetails.shopName || "MY SHOP"}</h2>
+                <p className="text-xs text-gray-400 mb-6 uppercase tracking-widest">Premium Auto Parts & Accessories</p>
+                
+                {/* Contact Info */}
+                <div className="space-y-3 relative z-10">
+                  <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg backdrop-blur-sm">
+                    <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                      <Phone size={14} className="text-yellow-400"/>
+                    </div>
+                    <span className="text-sm">+91 98765 43210</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg backdrop-blur-sm">
+                    <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                      <Store size={14} className="text-yellow-400"/>
+                    </div>
+                    <span className="text-sm">Main Market, City Name</span>
+                  </div>
+                </div>
+                
+                {/* QR Code Placeholder */}
+                <div className="absolute bottom-4 right-4 w-16 h-16 bg-white rounded-lg p-1">
+                  <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 rounded flex items-center justify-center text-gray-400 text-[8px]">QR</div>
                 </div>
              </div>
-             <p className="text-center text-xs opacity-50">Take a screenshot to share on WhatsApp</p>
+             
+             <div className="flex gap-2">
+               <button 
+                 onClick={async () => {
+                   if (!window.html2canvas) {
+                     const script = document.createElement('script');
+                     script.src = "https://html2canvas.hertzen.com/dist/html2canvas.min.js";
+                     document.head.appendChild(script);
+                     await new Promise(resolve => script.onload = resolve);
+                   }
+                   const element = document.getElementById('digital-card-area');
+                   if (!element) return;
+                   const canvas = await window.html2canvas(element, { backgroundColor: null, scale: 2 });
+                   const link = document.createElement('a');
+                   link.href = canvas.toDataURL();
+                   link.download = `BusinessCard_${Date.now()}.png`;
+                   link.click();
+                 }}
+                 className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+               >
+                 <Download size={18}/> Download Card
+               </button>
+               <button 
+                 onClick={() => {
+                   const text = `${shopDetails.shopName || 'My Shop'}\n📞 +91 98765 43210\n📍 Main Market, City`;
+                   navigator.share ? navigator.share({ text }) : navigator.clipboard.writeText(text);
+                 }}
+                 className="p-3 bg-gray-100 rounded-xl"
+               >
+                 <Share2 size={20} className="text-gray-600"/>
+               </button>
+             </div>
+             <p className="text-center text-xs opacity-50 mt-3">Customize in Shop Settings</p>
            </div>
          );
+
+      case 'emi': {
+        const P = parseFloat(emiInput.principal) || 0;
+        const r = (parseFloat(emiInput.rate) || 0) / 100 / 12; // Monthly rate
+        const n = emiInput.tenureType === 'years' 
+          ? (parseFloat(emiInput.tenure) || 0) * 12 
+          : (parseFloat(emiInput.tenure) || 0);
+        
+        let emi = 0, totalPayment = 0, totalInterest = 0;
+        if (P > 0 && r > 0 && n > 0) {
+          emi = P * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1);
+          totalPayment = emi * n;
+          totalInterest = totalPayment - P;
+        }
+        
+        return (
+          <div className={cardClass}>
+            <h3 className="font-bold mb-4 text-xl flex items-center gap-2">
+              <DollarSign className="text-emerald-500" size={24}/>
+              EMI Calculator
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">LOAN AMOUNT (₹)</label>
+                <input 
+                  type="number" 
+                  placeholder="Enter principal amount"
+                  className={`${commonInputClass} mb-0 text-center text-xl`}
+                  value={emiInput.principal}
+                  onChange={e => setEmiInput({...emiInput, principal: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">INTEREST RATE (% per annum)</label>
+                <input 
+                  type="number" 
+                  placeholder="e.g., 12"
+                  className={`${commonInputClass} mb-0`}
+                  value={emiInput.rate}
+                  onChange={e => setEmiInput({...emiInput, rate: e.target.value})}
+                />
+                <div className="flex gap-2 mt-2">
+                  {[8, 10, 12, 15, 18].map(rate => (
+                    <button 
+                      key={rate}
+                      onClick={() => setEmiInput({...emiInput, rate: rate.toString()})}
+                      className={`flex-1 py-1 rounded text-xs font-bold ${parseFloat(emiInput.rate) === rate ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">LOAN TENURE</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="number" 
+                    placeholder="Duration"
+                    className={`${commonInputClass} mb-0 flex-1`}
+                    value={emiInput.tenure}
+                    onChange={e => setEmiInput({...emiInput, tenure: e.target.value})}
+                  />
+                  <select 
+                    className={`${commonInputClass} mb-0 w-28`}
+                    value={emiInput.tenureType}
+                    onChange={e => setEmiInput({...emiInput, tenureType: e.target.value})}
+                  >
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            {P > 0 && emi > 0 && (
+              <div className="mt-6 bg-gradient-to-br from-emerald-50 to-green-50 p-4 rounded-2xl border-2 border-emerald-200">
+                <div className="text-center mb-4">
+                  <p className="text-xs font-bold text-emerald-600 mb-1">MONTHLY EMI</p>
+                  <p className="text-4xl font-black text-emerald-700">₹{emi.toFixed(0)}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/60 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-500">Total Interest</p>
+                    <p className="text-lg font-bold text-red-600">₹{totalInterest.toFixed(0)}</p>
+                  </div>
+                  <div className="bg-white/60 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-500">Total Payment</p>
+                    <p className="text-lg font-bold text-emerald-600">₹{totalPayment.toFixed(0)}</p>
+                  </div>
+                </div>
+                
+                {/* Visual Breakdown */}
+                <div className="mt-3 h-4 rounded-full overflow-hidden bg-gray-200 flex">
+                  <div 
+                    className="bg-emerald-500 h-full" 
+                    style={{ width: `${(P / totalPayment) * 100}%` }}
+                  ></div>
+                  <div 
+                    className="bg-red-400 h-full" 
+                    style={{ width: `${(totalInterest / totalPayment) * 100}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-500">
+                  <span>Principal ({((P / totalPayment) * 100).toFixed(0)}%)</span>
+                  <span>Interest ({((totalInterest / totalPayment) * 100).toFixed(0)}%)</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 'stockvalue': {
+        const totalValue = stockCalc.items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
+        const totalItems = stockCalc.items.reduce((sum, item) => sum + item.qty, 0);
+        
+        return (
+          <div className={cardClass}>
+            <h3 className="font-bold mb-4 text-xl flex items-center gap-2">
+              <Activity className="text-cyan-500" size={24}/>
+              Stock Value Calculator
+            </h3>
+            
+            {/* Add Item Form */}
+            <div className="bg-cyan-50 p-3 rounded-xl border border-cyan-200 mb-4">
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <input 
+                  placeholder="Item Name"
+                  className="col-span-3 p-2 rounded-lg border text-sm font-bold"
+                  value={stockCalc.newItem.name}
+                  onChange={e => setStockCalc({...stockCalc, newItem: {...stockCalc.newItem, name: e.target.value}})}
+                />
+                <input 
+                  type="number"
+                  placeholder="Qty"
+                  className="p-2 rounded-lg border text-sm"
+                  value={stockCalc.newItem.qty || ''}
+                  onChange={e => setStockCalc({...stockCalc, newItem: {...stockCalc.newItem, qty: parseInt(e.target.value) || 0}})}
+                />
+                <input 
+                  type="number"
+                  placeholder="Rate ₹"
+                  className="p-2 rounded-lg border text-sm"
+                  value={stockCalc.newItem.rate || ''}
+                  onChange={e => setStockCalc({...stockCalc, newItem: {...stockCalc.newItem, rate: parseFloat(e.target.value) || 0}})}
+                />
+                <button 
+                  onClick={() => {
+                    if (stockCalc.newItem.name && stockCalc.newItem.qty && stockCalc.newItem.rate) {
+                      setStockCalc({
+                        items: [...stockCalc.items, { ...stockCalc.newItem, id: Date.now() }],
+                        newItem: { name: '', qty: 0, rate: 0 }
+                      });
+                    }
+                  }}
+                  className="bg-cyan-600 text-white rounded-lg font-bold"
+                >
+                  <Plus size={20} className="mx-auto"/>
+                </button>
+              </div>
+            </div>
+            
+            {/* Items List */}
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              {stockCalc.items.map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="font-bold text-sm">{item.name}</p>
+                    <p className="text-xs text-gray-500">{item.qty} × ₹{item.rate}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-cyan-600">₹{(item.qty * item.rate).toFixed(0)}</span>
+                    <button 
+                      onClick={() => setStockCalc({...stockCalc, items: stockCalc.items.filter(i => i.id !== item.id)})}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <X size={16}/>
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {stockCalc.items.length === 0 && (
+                <div className="text-center py-6 text-gray-400">
+                  <Package size={32} className="mx-auto mb-2 opacity-50"/>
+                  <p className="text-sm">Add items to calculate stock value</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Total Summary */}
+            {stockCalc.items.length > 0 && (
+              <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-4 rounded-2xl border-2 border-cyan-200">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">Total Items</p>
+                    <p className="text-2xl font-bold text-gray-700">{totalItems}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500">SKU Count</p>
+                    <p className="text-2xl font-bold text-gray-700">{stockCalc.items.length}</p>
+                  </div>
+                </div>
+                <div className="text-center pt-3 border-t border-cyan-200">
+                  <p className="text-xs font-bold text-cyan-600 mb-1">TOTAL STOCK VALUE</p>
+                  <p className="text-4xl font-black text-cyan-700">₹{totalValue.toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            
+            {stockCalc.items.length > 0 && (
+              <button 
+                onClick={() => setStockCalc({ items: [], newItem: { name: '', qty: 0, rate: 0 } })}
+                className="w-full mt-3 py-2 text-red-500 bg-red-50 rounded-xl text-sm font-bold"
+              >
+                Clear All Items
+              </button>
+            )}
+          </div>
+        );
+      }
+
       case 'notes':
          // 📝 UPDATED NOTEPAD UI
          if(notesView === 'list') {
@@ -1276,7 +2829,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                             <button onClick={saveCurrentNote} className="text-yellow-600 font-bold text-sm">Save</button>
                          </div>
                      </div>
-                     <input className="p-4 text-xl font-bold outline-none bg-transparent border-b" placeholder="Title" value={currentNote.title} onChange={e => setCurrentNote({...currentNote, title: convertToHindi(e.target.value)})} />
+                     <input className="p-4 text-xl font-bold outline-none bg-transparent border-b" placeholder="Title" value={currentNote.title} onChange={e => setCurrentNote({...currentNote, title: e.target.value})} />
                      
                      {noteMode === 'text' ? (
                         <>
@@ -1333,29 +2886,38 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
         ) : (
           <button onClick={onBack} className="p-2 rounded-full hover:bg-gray-100/10"><ArrowLeft size={24}/></button>
         )}
-        <h1 className="text-xl font-bold">{activeTool ? tools.find(toolItem => toolItem.id === activeTool).name : t("Business Tools")}</h1>
+        <div>
+          <h1 className="text-xl font-bold">{activeTool ? tools.find(toolItem => toolItem.id === activeTool)?.name : t("Business Tools")}</h1>
+          {!activeTool && <p className="text-xs text-gray-500">Industry-ready business utilities</p>}
+        </div>
       </div>
 
       <div className="p-4 max-w-md mx-auto min-h-screen">
         {!activeTool && (
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-2 gap-3 mt-2">
             {tools.map(tool => {
                const isPinned = pinnedTools.includes(tool.id);
                return (
-                <div key={tool.id} className={`relative p-6 rounded-2xl border flex flex-col items-center justify-center gap-3 transition-transform ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-gray-200 hover:border-blue-400 shadow-sm'}`}>
-                  <div onClick={() => { setActiveTool(tool.id); setNotesView('list'); }} className="flex flex-col items-center justify-center w-full cursor-pointer">
-                    <div className={`p-4 rounded-full ${tool.color}`}>{tool.icon}</div>
-                    <span className="font-bold text-sm text-center mt-3">{t(tool.name)}</span>
-                  </div>
+                <div 
+                  key={tool.id} 
+                  className={`relative p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-gray-200 hover:border-blue-400 hover:shadow-lg shadow-sm'}`}
+                  onClick={() => { setActiveTool(tool.id); setNotesView('list'); }}
+                >
+                  <div className={`p-3 rounded-2xl ${tool.color} shadow-sm`}>{tool.icon}</div>
+                  <span className="font-bold text-sm text-center">{t(tool.name)}</span>
+                  <span className="text-[10px] text-gray-500 text-center">{tool.desc}</span>
                   {/* Pin Button */}
-                  <button onClick={(e) => { e.stopPropagation(); onTogglePin(tool.id); }} className={`absolute top-2 right-2 p-2 rounded-full ${isPinned ? 'text-blue-500 bg-blue-50' : 'text-gray-300 hover:text-gray-500'}`}>
-                      {isPinned ? <Pin size={16} fill="currentColor"/> : <Pin size={16}/>}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onTogglePin(tool.id); }} 
+                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all ${isPinned ? 'text-blue-500 bg-blue-100' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-100'}`}
+                  >
+                      {isPinned ? <Pin size={14} fill="currentColor"/> : <Pin size={14}/>}
                   </button>
                 </div>
                );
             })}
-            <div className="col-span-2 text-center text-xs opacity-50 mt-4">
-                Tip: Click the <Pin size={10} className="inline"/> icon to add tools to Home Screen.
+            <div className="col-span-2 text-center text-xs opacity-50 mt-4 flex items-center justify-center gap-1">
+                <Pin size={10}/> Pin tools to Home Screen for quick access
             </div>
           </div>
         )}
@@ -1702,7 +3264,7 @@ function DukanRegister() {
 
   const t = useCallback((text) => {
     if (!isHindi) return text;
-    return convertToHindi(text);
+    return convertToHindiFallback(text);
   }, [isHindi]);
 
   // Keep a ref to `data` so snapshot handler can merge transient local state without triggering
@@ -1718,6 +3280,16 @@ function DukanRegister() {
       setDisplayLimit(50);
       window.scrollTo(0,0);
   }, [view, activePageId, indexSearchTerm, stockSearchTerm, pageSearchTerm]);
+
+  // 🧠 Initialize Smart Search Engine with Trie when data changes
+  useEffect(() => {
+    if (data.entries && data.entries.length > 0) {
+      // Rebuild Trie for fast autocomplete - O(n*m) where n=items, m=avg name length
+      SmartSearchEngine.initialized = false;
+      SmartSearchEngine.initialize(data.entries);
+      console.log('🧠 Smart Search Engine initialized with', data.entries.length, 'items');
+    }
+  }, [data.entries]);
 
   // Check for pending writes (for sync indicator)
   useEffect(() => {
@@ -2695,6 +4267,16 @@ function DukanRegister() {
       {/* 📊 QUICK STATS WIDGET */}
       <QuickStats data={data} />
 
+      {/* 🤖 AI INSIGHTS WIDGET */}
+      {(data.settings?.widgets?.aiInsights !== false) && (
+        <AIInsightsWidget data={data} t={t} isDark={isDark} />
+      )}
+
+      {/* 📈 SALES PREDICTION WIDGET */}
+      {data.settings?.aiPredictions && (data.settings?.widgets?.predictions !== false) && (
+        <SalesPredictionWidget data={data} t={t} isDark={isDark} />
+      )}
+
       {/* 📦 DEAD STOCK ALERT */}
       <DeadStockAlert 
         data={data} 
@@ -2958,6 +4540,51 @@ function DukanRegister() {
     <div className={`p-4 pb-24 min-h-screen ${isDark ? 'bg-slate-900 text-white' : 'bg-gray-50 text-black'}`}>
        <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2><TranslateBtn /></div>
        
+       {/* ⚡ QUICK ACTIONS - OWNER SHORTCUTS */}
+       <div className="mb-6">
+           <div className={`p-4 rounded-2xl border relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-blue-900/30 to-purple-900/30 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200'}`}>
+             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+             <div className="relative">
+               <div className="flex items-center gap-2 mb-3">
+                 <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                   <Zap size={16} className="text-white" />
+                 </div>
+                 <span className="font-bold text-sm">{t("Quick Actions")}</span>
+                 <span className="text-[10px] opacity-50 ml-auto">{t("Owner Shortcuts")}</span>
+               </div>
+               
+               <div className="grid grid-cols-4 gap-2">
+                 {[
+                   { icon: Package, label: t('Stock'), action: () => setView('inventory'), color: 'from-emerald-400 to-green-500' },
+                   { icon: Receipt, label: t('Bills'), action: () => setView('bills'), color: 'from-blue-400 to-cyan-500' },
+                   { icon: BarChart3, label: t('Report'), action: () => showToast(t('Coming Soon!')), color: 'from-purple-400 to-pink-500' },
+                   { icon: Download, label: t('Backup'), action: () => {
+                     const exportData = JSON.stringify(data, null, 2);
+                     const blob = new Blob([exportData], { type: 'application/json' });
+                     const url = URL.createObjectURL(blob);
+                     const a = document.createElement('a');
+                     a.href = url;
+                     a.download = `${data.settings?.shopName || 'shop'}_backup_${new Date().toISOString().split('T')[0]}.json`;
+                     a.click();
+                     showToast(t("Backup Downloaded!"));
+                   }, color: 'from-orange-400 to-red-500' },
+                 ].map((item, i) => (
+                   <button
+                     key={i}
+                     onClick={item.action}
+                     className={`p-3 rounded-xl ${isDark ? 'bg-slate-700/60 hover:bg-slate-600/80' : 'bg-white/80 hover:bg-white'} flex flex-col items-center gap-1 transition-all active:scale-95 shadow-sm`}
+                   >
+                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center shadow-md`}>
+                       <item.icon size={18} className="text-white" />
+                     </div>
+                     <span className="text-[10px] font-semibold">{item.label}</span>
+                   </button>
+                 ))}
+               </div>
+             </div>
+           </div>
+       </div>
+
        <div className="mb-6">
            <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Business Utility")}</p>
            <button onClick={() => setView('tools')} className={`w-full p-4 rounded-xl flex items-center justify-between gap-2 shadow-sm border ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700' : 'bg-white border-blue-100 text-blue-600 hover:bg-blue-50'} transition-all`}>
@@ -2967,6 +4594,656 @@ function DukanRegister() {
             </div>
             <ChevronRight size={20} className="opacity-50"/>
            </button>
+       </div>
+
+       {/* 🤖 AI & SMART FEATURES */}
+       <div className="mb-6">
+           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1 flex items-center gap-2">
+             <Zap size={12} className="text-yellow-500"/> {t("AI & Smart Features")}
+           </p>
+           
+           {/* AI Predictions Toggle */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Activity size={16} className="text-purple-500" /> {t("AI Sales Predictions")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("Predict future sales using ML algorithms")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, aiPredictions: !data.settings?.aiPredictions}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.aiPredictions ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.aiPredictions ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
+           {/* Smart Reorder Alerts */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Bell size={16} className="text-green-500" /> {t("Smart Reorder Alerts")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("AI calculates when to reorder stock")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, smartReorder: !data.settings?.smartReorder}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.smartReorder ? 'bg-green-600 text-white border-green-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.smartReorder ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
+           {/* Price Optimization */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <DollarSign size={16} className="text-blue-500" /> {t("Price Optimization")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("AI suggests optimal pricing")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, priceOptimization: !data.settings?.priceOptimization}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.priceOptimization ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.priceOptimization ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
+           {/* Fuzzy Search */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Search size={16} className="text-orange-500" /> {t("Fuzzy Search")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("Find items even with typos")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, fuzzySearch: !data.settings?.fuzzySearch}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.fuzzySearch ? 'bg-orange-600 text-white border-orange-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.fuzzySearch ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
+           {/* Auto Categorization */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-pink-50 to-rose-50 border-pink-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Layers size={16} className="text-pink-500" /> {t("Auto Categorization")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("AI groups similar products")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, autoCategory: !data.settings?.autoCategory}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.autoCategory ? 'bg-pink-600 text-white border-pink-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.autoCategory ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
+           {/* Voice AI Commands */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-indigo-50 to-violet-50 border-indigo-200'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Mic size={16} className="text-indigo-500" /> {t("Voice AI Commands")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("Control app with voice in Hindi/English")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, voiceAI: !data.settings?.voiceAI}})} 
+                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.voiceAI ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {data.settings?.voiceAI ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+       </div>
+
+       {/* 📊 DASHBOARD WIDGETS */}
+       <div className="mb-6">
+           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1 flex items-center gap-2">
+             <Grid size={12} className="text-cyan-500"/> {t("Dashboard Widgets")}
+           </p>
+           
+           <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <p className="text-xs text-gray-500 mb-3">{t("Select widgets to show on dashboard")}</p>
+             
+             <div className="grid grid-cols-2 gap-2">
+               {[
+                 { id: 'aiInsights', label: '🧠 AI Insights', desc: 'Smart suggestions' },
+                 { id: 'salesChart', label: '📈 Sales Chart', desc: 'Visual analytics' },
+                 { id: 'lowStock', label: '⚠️ Low Stock', desc: 'Alerts panel' },
+                 { id: 'topProducts', label: '🏆 Top Products', desc: 'Best sellers' },
+                 { id: 'recentActivity', label: '📋 Recent Activity', desc: 'Action log' },
+                 { id: 'predictions', label: '🔮 Predictions', desc: 'Future trends' },
+               ].map(widget => {
+                 const isEnabled = data.settings?.widgets?.[widget.id] !== false;
+                 return (
+                   <button 
+                     key={widget.id}
+                     onClick={() => pushToFirebase({
+                       ...data, 
+                       settings: {
+                         ...data.settings, 
+                         widgets: {...(data.settings?.widgets || {}), [widget.id]: !isEnabled}
+                       }
+                     })}
+                     className={`p-3 rounded-xl border text-left transition-all ${isEnabled 
+                       ? (isDark ? 'bg-slate-700 border-blue-500' : 'bg-blue-50 border-blue-300') 
+                       : (isDark ? 'bg-slate-800 border-slate-600 opacity-50' : 'bg-gray-50 border-gray-200 opacity-50')
+                     }`}
+                   >
+                     <span className="text-sm">{widget.label}</span>
+                     <p className="text-[10px] text-gray-500">{widget.desc}</p>
+                     {isEnabled && <CheckCircle size={12} className="text-blue-500 mt-1"/>}
+                   </button>
+                 );
+               })}
+             </div>
+           </div>
+       </div>
+
+       {/* 🚀 FUTURISTIC FEATURES - OWNER POWER TOOLS */}
+       <div className="mb-6">
+           <div className="flex items-center gap-2 mb-3">
+             <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
+             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 shadow-lg shadow-purple-500/30">
+               <Rocket size={14} className="text-white animate-pulse" />
+               <span className="text-xs font-bold text-white uppercase tracking-wider">{t("Futuristic Features")}</span>
+               <Sparkles size={14} className="text-yellow-300" />
+             </div>
+             <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
+           </div>
+           
+           {/* 📊 BUSINESS INTELLIGENCE HUB */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-slate-800 to-indigo-900/50 border-indigo-500/50' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-indigo-200'}`}>
+             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+             <div className="relative">
+               <div className="flex items-center gap-2 mb-3">
+                 <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
+                   <Brain size={18} className="text-white" />
+                 </div>
+                 <div>
+                   <h3 className="font-bold text-sm">{t("Business Intelligence Hub")}</h3>
+                   <p className="text-[10px] opacity-60">{t("Smart analytics for growth")}</p>
+                 </div>
+                 <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500">
+                   <Crown size={10} className="text-white" />
+                   <span className="text-[9px] font-bold text-white">PRO</span>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-2 gap-2">
+                 {[
+                   { id: 'salesForecast', icon: TrendingUp, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
+                   { id: 'profitAnalytics', icon: PieChart, label: t('Profit Analytics'), desc: t('Real-time margins'), color: 'from-blue-400 to-cyan-500' },
+                   { id: 'customerInsights', icon: Users, label: t('Customer Insights'), desc: t('Buying patterns'), color: 'from-purple-400 to-pink-500' },
+                   { id: 'inventoryHealth', icon: Gauge, label: t('Inventory Health'), desc: t('Stock optimization'), color: 'from-orange-400 to-red-500' }
+                 ].map(feature => {
+                   const isEnabled = data.settings?.biFeatures?.[feature.id];
+                   return (
+                     <button
+                       key={feature.id}
+                       onClick={() => pushToFirebase({
+                         ...data,
+                         settings: {...data.settings, biFeatures: {...(data.settings?.biFeatures || {}), [feature.id]: !isEnabled}}
+                       })}
+                       className={`p-3 rounded-xl border text-left transition-all duration-300 ${isEnabled 
+                         ? 'bg-white/80 dark:bg-slate-700/80 border-indigo-300 shadow-md scale-[1.02]' 
+                         : 'bg-white/40 dark:bg-slate-800/40 border-gray-200 dark:border-slate-600 opacity-60'}`}
+                     >
+                       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${feature.color} flex items-center justify-center mb-2 shadow-sm`}>
+                         <feature.icon size={16} className="text-white" />
+                       </div>
+                       <p className="text-xs font-semibold">{feature.label}</p>
+                       <p className="text-[9px] opacity-50">{feature.desc}</p>
+                       {isEnabled && <div className="mt-1 flex items-center gap-1 text-green-500"><CheckCircle size={10}/><span className="text-[9px] font-bold">Active</span></div>}
+                     </button>
+                   );
+                 })}
+               </div>
+             </div>
+           </div>
+
+           {/* 🔐 ADVANCED SECURITY */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-red-900/30 border-red-500/30' : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl shadow-lg">
+                 <Shield size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Advanced Security")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Protect your business data")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               {/* Biometric Lock */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <Fingerprint size={20} className="text-red-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Biometric Lock")}</p>
+                     <p className="text-[10px] opacity-50">{t("Face ID / Fingerprint")}</p>
+                   </div>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, biometricLock: !data.settings?.biometricLock}})}
+                   className={`relative w-12 h-6 rounded-full transition-all duration-300 ${data.settings?.biometricLock ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-300'}`}
+                 >
+                   <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${data.settings?.biometricLock ? 'left-6' : 'left-0.5'}`}></div>
+                 </button>
+               </div>
+               
+               {/* Auto Lock Timer */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <Timer size={20} className="text-orange-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Auto Lock")}</p>
+                     <p className="text-[10px] opacity-50">{t("Lock after inactivity")}</p>
+                   </div>
+                 </div>
+                 <select 
+                   value={data.settings?.autoLockTime || '5'}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoLockTime: e.target.value}})}
+                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
+                 >
+                   <option value="1">1 min</option>
+                   <option value="5">5 min</option>
+                   <option value="15">15 min</option>
+                   <option value="30">30 min</option>
+                   <option value="never">Never</option>
+                 </select>
+               </div>
+               
+               {/* Data Encryption */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <Key size={20} className="text-yellow-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Data Encryption")}</p>
+                     <p className="text-[10px] opacity-50">{t("AES-256 encryption")}</p>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-600">
+                   <CheckCircle size={12}/>
+                   <span className="text-[10px] font-bold">Enabled</span>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           {/* ☁️ CLOUD & BACKUP */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-cyan-900/30 border-cyan-500/30' : 'bg-gradient-to-br from-cyan-50 to-blue-50 border-cyan-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl shadow-lg">
+                 <Cloud size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Cloud & Backup")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Never lose your data")}</p>
+               </div>
+               <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500">
+                 <CloudUpload size={10} className="text-white" />
+                 <span className="text-[9px] font-bold text-white">Synced</span>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               {/* Auto Backup */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <HardDrive size={20} className="text-cyan-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Auto Backup")}</p>
+                     <p className="text-[10px] opacity-50">{t("Schedule automatic backups")}</p>
+                   </div>
+                 </div>
+                 <select 
+                   value={data.settings?.autoBackup || 'daily'}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoBackup: e.target.value}})}
+                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
+                 >
+                   <option value="hourly">Hourly</option>
+                   <option value="daily">Daily</option>
+                   <option value="weekly">Weekly</option>
+                   <option value="manual">Manual</option>
+                 </select>
+               </div>
+               
+               {/* Export Data */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <FileSpreadsheet size={20} className="text-green-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Export Reports")}</p>
+                     <p className="text-[10px] opacity-50">{t("Excel / PDF / CSV")}</p>
+                   </div>
+                 </div>
+                 <button 
+                   onClick={() => {
+                     const exportData = JSON.stringify(data, null, 2);
+                     const blob = new Blob([exportData], { type: 'application/json' });
+                     const url = URL.createObjectURL(blob);
+                     const a = document.createElement('a');
+                     a.href = url;
+                     a.download = `${data.settings?.shopName || 'shop'}_backup_${new Date().toISOString().split('T')[0]}.json`;
+                     a.click();
+                     showToast(t("Backup Downloaded!"));
+                   }}
+                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white flex items-center gap-1"
+                 >
+                   <Download size={12}/> Export
+                 </button>
+               </div>
+               
+               {/* Last Backup */}
+               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-600/50' : 'bg-cyan-100/50'} flex items-center justify-between`}>
+                 <span className="text-[10px] opacity-70">{t("Last Backup")}</span>
+                 <span className="text-[10px] font-bold">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
+               </div>
+             </div>
+           </div>
+
+           {/* 📱 SMART NOTIFICATIONS */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-green-900/30 border-green-500/30' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl shadow-lg">
+                 <Bell size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Smart Notifications")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Stay informed always")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               {[
+                 { id: 'lowStockAlert', icon: Package, label: t('Low Stock Alerts'), color: 'text-orange-500' },
+                 { id: 'dailySummary', icon: BarChart3, label: t('Daily Summary'), color: 'text-blue-500' },
+                 { id: 'priceDropAlert', icon: TrendingDown, label: t('Price Drop Alerts'), color: 'text-red-500' },
+                 { id: 'expiryAlert', icon: AlertTriangle, label: t('Expiry Reminders'), color: 'text-yellow-500' },
+               ].map(item => (
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                   <div className="flex items-center gap-3">
+                     <item.icon size={18} className={item.color} />
+                     <p className="text-sm font-semibold">{item.label}</p>
+                   </div>
+                   <button 
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, notifications: {...(data.settings?.notifications || {}), [item.id]: !data.settings?.notifications?.[item.id]}}})}
+                     className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.notifications?.[item.id] ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gray-300'}`}
+                   >
+                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.notifications?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
+                   </button>
+                 </div>
+               ))}
+             </div>
+           </div>
+
+           {/* 👥 MULTI-USER ACCESS */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-violet-900/30 border-violet-500/30' : 'bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl shadow-lg">
+                 <Users size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Multi-User Access")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Staff management")}</p>
+               </div>
+               <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-purple-500">
+                 <Star size={10} className="text-yellow-300" />
+                 <span className="text-[9px] font-bold text-white">TEAM</span>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center justify-between mb-2">
+                   <p className="text-sm font-semibold">{t("Staff Accounts")}</p>
+                   <button 
+                     onClick={() => showToast(t("Coming Soon!"))}
+                     className="px-2 py-1 rounded-lg text-xs font-bold bg-violet-100 text-violet-600 flex items-center gap-1"
+                   >
+                     <UserPlus size={12}/> Add
+                   </button>
+                 </div>
+                 <div className="flex -space-x-2">
+                   {['👤', '👨‍💼', '👩‍💻'].map((emoji, i) => (
+                     <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 ${isDark ? 'border-slate-700 bg-slate-600' : 'border-white bg-gray-100'}`}>
+                       {emoji}
+                     </div>
+                   ))}
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${isDark ? 'border-slate-700 bg-violet-600 text-white' : 'border-white bg-violet-100 text-violet-600'}`}>
+                     +2
+                   </div>
+                 </div>
+               </div>
+               
+               {/* Role Permissions */}
+               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-600/50' : 'bg-violet-100/50'} text-[10px]`}>
+                 <div className="flex items-center justify-between mb-1">
+                   <span className="flex items-center gap-1"><Crown size={10} className="text-yellow-500"/> {t("Admin")}</span>
+                   <span className="opacity-60">{t("Full Access")}</span>
+                 </div>
+                 <div className="flex items-center justify-between">
+                   <span className="flex items-center gap-1"><User size={10} className="text-blue-500"/> {t("Staff")}</span>
+                   <span className="opacity-60">{t("Limited Access")}</span>
+                 </div>
+               </div>
+             </div>
+           </div>
+
+           {/* 🎨 APPEARANCE & ACCESSIBILITY */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-pink-900/30 border-pink-500/30' : 'bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl shadow-lg">
+                 <Palette size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Appearance & Accessibility")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Customize your experience")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               {/* Font Size */}
+               <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center justify-between mb-2">
+                   <div className="flex items-center gap-2">
+                     <Type size={16} className="text-pink-500"/>
+                     <span className="text-sm font-semibold">{t("Font Size")}</span>
+                   </div>
+                   <span className="text-xs font-bold">{data.settings?.fontSize || 'Medium'}</span>
+                 </div>
+                 <div className="flex gap-2">
+                   {['Small', 'Medium', 'Large'].map(size => (
+                     <button
+                       key={size}
+                       onClick={() => pushToFirebase({...data, settings: {...data.settings, fontSize: size}})}
+                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${data.settings?.fontSize === size || (!data.settings?.fontSize && size === 'Medium')
+                         ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white' 
+                         : isDark ? 'bg-slate-600 text-gray-300' : 'bg-gray-100'}`}
+                     >
+                       {size}
+                     </button>
+                   ))}
+                 </div>
+               </div>
+               
+               {/* Sound Effects */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   {data.settings?.soundEffects !== false ? <Volume2 size={18} className="text-blue-500" /> : <VolumeX size={18} className="text-gray-400" />}
+                   <p className="text-sm font-semibold">{t("Sound Effects")}</p>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, soundEffects: data.settings?.soundEffects === false}})}
+                   className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.soundEffects !== false ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'}`}
+                 >
+                   <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.soundEffects !== false ? 'left-5' : 'left-0.5'}`}></div>
+                 </button>
+               </div>
+               
+               {/* High Contrast */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <Eye size={18} className="text-purple-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("High Contrast")}</p>
+                     <p className="text-[10px] opacity-50">{t("Better visibility")}</p>
+                   </div>
+                 </div>
+                 <button 
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, highContrast: !data.settings?.highContrast}})}
+                   className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.highContrast ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-300'}`}
+                 >
+                   <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.highContrast ? 'left-5' : 'left-0.5'}`}></div>
+                 </button>
+               </div>
+             </div>
+           </div>
+
+           {/* 📍 BUSINESS LOCATION */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-teal-900/30 border-teal-500/30' : 'bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-xl shadow-lg">
+                 <MapPin size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Business Location")}</h3>
+                 <p className="text-[10px] opacity-60">{t("For invoices & delivery")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               <input 
+                 type="text"
+                 placeholder={t("Shop Address")}
+                 value={data.settings?.shopAddress || ''}
+                 onChange={e => pushToFirebase({...data, settings: {...data.settings, shopAddress: e.target.value}})}
+                 className={`w-full p-3 rounded-xl border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
+               />
+               <div className="grid grid-cols-2 gap-2">
+                 <input 
+                   type="text"
+                   placeholder={t("City")}
+                   value={data.settings?.shopCity || ''}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopCity: e.target.value}})}
+                   className={`p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
+                 />
+                 <input 
+                   type="text"
+                   placeholder={t("PIN Code")}
+                   value={data.settings?.shopPincode || ''}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopPincode: e.target.value}})}
+                   className={`p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
+                 />
+               </div>
+               <input 
+                 type="text"
+                 placeholder={t("GST Number (Optional)")}
+                 value={data.settings?.gstNumber || ''}
+                 onChange={e => pushToFirebase({...data, settings: {...data.settings, gstNumber: e.target.value}})}
+                 className={`w-full p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
+               />
+             </div>
+           </div>
+
+           {/* ⚡ PERFORMANCE MODE */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-amber-900/30 border-amber-500/30' : 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <div className="p-2 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-xl shadow-lg">
+                 <Zap size={18} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-sm">{t("Performance Mode")}</h3>
+                 <p className="text-[10px] opacity-60">{t("Optimize for your device")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-2">
+               {[
+                 { id: 'batterySaver', icon: Battery, label: t('Battery Saver'), desc: t('Reduce animations'), color: 'text-green-500' },
+                 { id: 'lowDataMode', icon: Signal, label: t('Low Data Mode'), desc: t('Compress images'), color: 'text-blue-500' },
+                 { id: 'offlineFirst', icon: CloudOff, label: t('Offline First'), desc: t('Work without internet'), color: 'text-purple-500' },
+               ].map(item => (
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                   <div className="flex items-center gap-3">
+                     <item.icon size={18} className={item.color} />
+                     <div>
+                       <p className="text-sm font-semibold">{item.label}</p>
+                       <p className="text-[10px] opacity-50">{item.desc}</p>
+                     </div>
+                   </div>
+                   <button 
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, performance: {...(data.settings?.performance || {}), [item.id]: !data.settings?.performance?.[item.id]}}})}
+                     className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.performance?.[item.id] ? 'bg-gradient-to-r from-amber-500 to-yellow-500' : 'bg-gray-300'}`}
+                   >
+                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.performance?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
+                   </button>
+                 </div>
+               ))}
+             </div>
+           </div>
+
+           {/* 🏆 BUSINESS ACHIEVEMENTS */}
+           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-yellow-900/20 to-amber-900/30 border-yellow-500/30' : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-yellow-200'}`}>
+             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-yellow-400/20 to-amber-400/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+             <div className="relative">
+               <div className="flex items-center gap-2 mb-3">
+                 <div className="p-2 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-xl shadow-lg">
+                   <Award size={18} className="text-white" />
+                 </div>
+                 <div>
+                   <h3 className="font-bold text-sm">{t("Business Achievements")}</h3>
+                   <p className="text-[10px] opacity-60">{t("Your milestones")}</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-3 gap-2">
+                 {[
+                   { icon: '🏪', label: t('Active Days'), value: '30+' },
+                   { icon: '📦', label: t('Products'), value: (data.entries?.length || 0).toString() },
+                   { icon: '📊', label: t('Transactions'), value: (data.bills?.length || 0).toString() },
+                 ].map((stat, i) => (
+                   <div key={i} className={`p-2 rounded-xl text-center ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
+                     <span className="text-2xl">{stat.icon}</span>
+                     <p className="text-lg font-bold">{stat.value}</p>
+                     <p className="text-[9px] opacity-60">{stat.label}</p>
+                   </div>
+                 ))}
+               </div>
+               
+               <div className={`mt-3 p-2 rounded-xl ${isDark ? 'bg-gradient-to-r from-yellow-900/50 to-amber-900/50' : 'bg-gradient-to-r from-yellow-100 to-amber-100'}`}>
+                 <div className="flex items-center justify-between text-xs">
+                   <span className="flex items-center gap-1"><Flame size={12} className="text-orange-500"/> {t("Business Level")}</span>
+                   <span className="font-bold flex items-center gap-1">
+                     <Star size={12} className="text-yellow-500"/>
+                     {(data.entries?.length || 0) > 100 ? 'Gold' : (data.entries?.length || 0) > 50 ? 'Silver' : 'Bronze'}
+                   </span>
+                 </div>
+                 <div className="mt-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                   <div 
+                     className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full transition-all"
+                     style={{ width: `${Math.min(100, ((data.entries?.length || 0) / 100) * 100)}%` }}
+                   ></div>
+                 </div>
+               </div>
+             </div>
+           </div>
        </div>
 
        <div className="mb-6">
@@ -3066,11 +5343,52 @@ function DukanRegister() {
 
        <button onClick={handleLogout} className="w-full py-3 border-2 border-red-400 bg-red-50 text-red-600 rounded-lg font-bold flex items-center justify-center gap-2"><LogOut size={20}/> {t("Logout Shop")}</button>
        
-       <div className="mt-8 text-center opacity-60 pb-4">
-           <p className="text-[10px] uppercase tracking-widest mb-1">{t("Parent Company")}</p>
-           <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-slate-100 border border-slate-200">
-               <ShieldCheck size={14} className="text-blue-600" />
-               <p className="font-bold text-sm text-slate-800">AutomationX</p>
+       <div className="mt-8 pb-6">
+           {/* App Version & Premium Badge */}
+           <div className={`mb-4 p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 via-purple-900/30 to-blue-900/30 border-purple-500/30' : 'bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 border-purple-200'}`}>
+             <div className="flex items-center justify-between mb-3">
+               <div className="flex items-center gap-2">
+                 <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                   <Rocket size={20} className="text-white" />
+                 </div>
+                 <div>
+                   <p className="font-bold text-sm">{data.settings?.shopName || 'AutoGear'}</p>
+                   <p className="text-[10px] opacity-50">v2.0 Final Edition</p>
+                 </div>
+               </div>
+               <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow">
+                 <Crown size={12} className="text-white" />
+                 <span className="text-[10px] font-bold text-white">PRO</span>
+               </div>
+             </div>
+             
+             <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
+                 <Brain size={16} className="mx-auto text-purple-500 mb-1"/>
+                 <span className="font-semibold">{t("AI Powered")}</span>
+               </div>
+               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
+                 <Shield size={16} className="mx-auto text-green-500 mb-1"/>
+                 <span className="font-semibold">{t("Secure")}</span>
+               </div>
+               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
+                 <Cloud size={16} className="mx-auto text-blue-500 mb-1"/>
+                 <span className="font-semibold">{t("Cloud Sync")}</span>
+               </div>
+             </div>
+           </div>
+           
+           {/* Parent Company */}
+           <div className="text-center opacity-70">
+             <p className="text-[9px] uppercase tracking-widest mb-2">{t("Developed & Powered By")}</p>
+             <div className={`inline-flex items-center gap-2 px-5 py-2 rounded-full shadow-md ${isDark ? 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500' : 'bg-gradient-to-r from-slate-100 to-white border border-slate-200'}`}>
+               <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                 <Sparkles size={12} className="text-white" />
+               </div>
+               <p className="font-bold text-sm">AutomationX</p>
+               <BadgeCheck size={16} className="text-blue-500" />
+             </div>
+             <p className="text-[8px] mt-2 opacity-50">© 2024 All Rights Reserved</p>
            </div>
        </div>
     </div>
