@@ -13,7 +13,8 @@ import {
   Share2, Calendar, MoreVertical, History, RefreshCcw, DollarSign,
   Pin, PinOff, PenTool, Highlighter, Circle as CircleIcon, Eraser, Type,
   RefreshCw, RotateCcw, Printer, FilePlus, Send,
-  Bold, Italic, Underline // <--- Added these for Notepad
+  Bold, Italic, Underline, // <--- Added these for Notepad
+  PackageX, TrendingDown, Tag, Vibrate, Activity // ✅ NEW: Dead Stock & Smart Features
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -338,6 +339,465 @@ const convertToHindi = (text) => {
     console.error(err);
     return strText;
   }
+};
+
+// ---------------------------------------------------------
+// 🧠 DESI DICTIONARY (SYNONYM MAP) - Hindi-to-English Brain
+// ---------------------------------------------------------
+const synonymMap = {
+    // Liquids
+    "tel": "oil", "paani": "coolant", "coolent": "coolant", "pani": "coolant",
+    "grease": "lubricant", "petrol": "fuel", "diesel": "fuel",
+    
+    // Body Parts  
+    "sheesha": "mirror", "glass": "mirror", "batti": "light", "headlight": "light",
+    "tail light": "back light", "bumper": "guard", "dabba": "kit",
+    "pahiya": "wheel", "tyre": "tire", "patti": "belt", "patla": "gasket",
+    
+    // Engine Parts
+    "plug": "spark plug", "coil": "ignition", "injector": "fuel injector",
+    "silencer": "exhaust", "radiator": "coolant", "ac": "air conditioner",
+    
+    // Actions/Status
+    "awaz": "sound", "khat khat": "suspension", "thanda": "ac", "garam": "heat",
+    "start nahi": "battery", "jhatka": "plug", "dhuan": "smoke", "leak": "seal",
+    
+    // Common Misspellings
+    "filtar": "filter", "filtter": "filter", "brack": "brake", "brek": "brake",
+    "cushon": "cushion", "shocker": "shock absorber", "shockar": "shock absorber",
+    "steerin": "steering", "clutc": "clutch", "geer": "gear",
+    
+    // Car Names (Common Hindi/Hinglish)
+    "swiftt": "swift", "creata": "creta", "cretta": "creta", "tharr": "thar",
+    "innova": "innova crysta", "fortunar": "fortuner", "baleeno": "baleno"
+};
+
+// ---------------------------------------------------------
+// 🔍 INTELLIGENT SEARCH ALGORITHM (Fuzzy Brain)
+// ---------------------------------------------------------
+const performSmartSearch = (rawTranscript, inventory, pages) => {
+    // Step A: Normalize & Translate (Tel -> Oil)
+    let processedText = rawTranscript.toLowerCase().trim();
+    
+    // Replace mapped words (whole word match)
+    Object.keys(synonymMap).forEach(desiWord => {
+        const regex = new RegExp(`\\b${desiWord}\\b`, 'gi');
+        if (regex.test(processedText)) {
+            processedText = processedText.replace(regex, synonymMap[desiWord]);
+        }
+    });
+
+    console.log(`🧠 Original: "${rawTranscript}" -> AI Processed: "${processedText}"`);
+
+    // Step B: Keyword Extraction (Remove filler words)
+    const fillerWords = /\b(check|search|find|dhundo|dekho|batao|kya|hai|available|stock|mein|ka|ki|ke|se|aur|or|the|is|a|an|for|in|of)\b/gi;
+    const keywords = processedText
+        .replace(fillerWords, "")
+        .trim()
+        .split(/\s+/)
+        .filter(k => k.length > 1); // Remove single letter remnants
+
+    if (keywords.length === 0) return { match: false, items: [], interpretedAs: processedText };
+
+    // Step C: Scoring System (Advanced Fuzzy Logic)
+    const scoredItems = inventory.map(item => {
+        let score = 0;
+        const itemCar = (item.car || '').toLowerCase();
+        const page = pages.find(p => p.id === item.pageId);
+        const itemName = (page?.itemName || '').toLowerCase();
+        const combinedText = `${itemCar} ${itemName}`;
+        
+        keywords.forEach(word => {
+            // Exact match = 10 points
+            if (combinedText.includes(word)) score += 10;
+            
+            // Partial match (for typos) = 5 points
+            else if (word.length > 3) {
+                const partialWord = word.slice(0, -1); // Remove last char for typo tolerance
+                if (combinedText.includes(partialWord)) score += 5;
+            }
+            
+            // First letter match (very loose) = 2 points
+            else if (combinedText.split(' ').some(w => w.startsWith(word[0]))) score += 2;
+        });
+
+        return { ...item, score, pageName: itemName };
+    });
+
+    // Filter items with score > 0 and Sort by highest score
+    const matches = scoredItems
+        .filter(i => i.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10); // Limit to top 10 results
+
+    return { 
+        match: matches.length > 0, 
+        items: matches,
+        interpretedAs: processedText,
+        keywords: keywords
+    };
+};
+
+// ---------------------------------------------------------
+// 📳 SHAKE SENSOR HOOK (Ghost Listener Activation)
+// ---------------------------------------------------------
+const useShakeSensor = (onShake, enabled = true) => {
+    useEffect(() => {
+        if (!enabled) return;
+        
+        let shakeCount = 0;
+        let lastTime = Date.now();
+        let lastX = 0, lastY = 0, lastZ = 0;
+        const SHAKE_THRESHOLD = 15; // Sensitivity
+        const SHAKE_TIMEOUT = 1000; // Reset count if not shaken again within 1 sec
+        const REQUIRED_SHAKES = 2; // Need 2 shakes to trigger
+
+        const handleMotion = (e) => {
+            const { x, y, z } = e.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
+            if (!x && !y && !z) return;
+
+            const curTime = Date.now();
+            if ((curTime - lastTime) > 100) {
+                const diffTime = curTime - lastTime;
+                lastTime = curTime;
+                
+                // Calculate Speed
+                const speed = Math.abs(x + y + z - lastX - lastY - lastZ) / diffTime * 10000;
+
+                if (speed > SHAKE_THRESHOLD) {
+                    shakeCount++;
+                    console.log(`📳 Shake detected! Count: ${shakeCount}`);
+                    
+                    if (shakeCount >= REQUIRED_SHAKES) {
+                        onShake();
+                        shakeCount = 0;
+                    }
+                }
+
+                lastX = x; lastY = y; lastZ = z;
+            }
+        };
+
+        // Reset shake count after timeout
+        const resetInterval = setInterval(() => {
+            if (shakeCount > 0 && Date.now() - lastTime > SHAKE_TIMEOUT) {
+                shakeCount = 0;
+            }
+        }, 500);
+
+        // Request permission for iOS 13+
+        const DME = DeviceMotionEvent as any;
+        if (typeof DME !== 'undefined' && typeof DME.requestPermission === 'function') {
+            DME.requestPermission()
+                .then((response: string) => {
+                    if (response === 'granted') {
+                        window.addEventListener('devicemotion', handleMotion);
+                    }
+                })
+                .catch(console.error);
+        } else {
+            window.addEventListener('devicemotion', handleMotion);
+        }
+
+        return () => {
+            window.removeEventListener('devicemotion', handleMotion);
+            clearInterval(resetInterval);
+        };
+    }, [onShake, enabled]);
+};
+
+// ---------------------------------------------------------
+// 👻 GHOST MIC COMPONENT (Hands-Free Voice Search)
+// ---------------------------------------------------------
+const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
+    const [status, setStatus] = useState("Listening...");
+    const [resultText, setResultText] = useState("");
+    const [searchResult, setSearchResult] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    // Text to Speech Helper
+    const speak = useCallback((text) => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Stop any ongoing speech
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-IN'; // Indian English
+            utterance.rate = 1.1;
+            window.speechSynthesis.speak(utterance);
+        }
+    }, []);
+
+    useEffect(() => {
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        if (!SpeechRecognition) {
+            setStatus("❌ Browser not supported");
+            speak("Sorry, voice search not supported on this browser.");
+            setTimeout(onClose, 2000);
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-IN'; // Best for Hinglish
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+            // Vibrate to tell user "I am listening"
+            if (navigator.vibrate) navigator.vibrate(200);
+            setStatus("🎤 Listening...");
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setResultText(transcript);
+            setStatus("🧠 Processing...");
+            setIsProcessing(true);
+
+            // Vibrate for processing
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+            // ⚡ RUN THE ADVANCED ALGORITHM
+            setTimeout(() => {
+                const result = performSmartSearch(transcript, inventory, pages);
+                setSearchResult(result);
+
+                if (result.match) {
+                    const topItem = result.items[0];
+                    const count = result.items.length;
+                    const msg = `Found ${topItem.car}. Quantity is ${topItem.qty}. ${count > 1 ? `Plus ${count - 1} more items.` : ''}`;
+                    
+                    setStatus(`✅ Found ${count} item${count > 1 ? 's' : ''}!`);
+                    speak(msg);
+                } else {
+                    const msg = `Sorry, no stock found for ${transcript}`;
+                    setStatus(`❌ Not Found`);
+                    speak(msg);
+                }
+                setIsProcessing(false);
+            }, 500);
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            if (event.error === 'no-speech') {
+                setStatus("🔇 No speech detected");
+                speak("Did not hear anything. Please try again.");
+            } else {
+                setStatus(`❌ Error: ${event.error}`);
+            }
+            setTimeout(onClose, 2000);
+        };
+
+        recognition.onend = () => {
+            if (!isProcessing && !searchResult) {
+                // Recognition ended without result
+            }
+        };
+
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error('Failed to start recognition:', e);
+            setStatus("❌ Failed to start");
+        }
+
+        return () => {
+            try { recognition.stop(); } catch (e) { /* ignore */ }
+            window.speechSynthesis.cancel();
+        };
+    }, [inventory, pages, speak, onClose]);
+
+    const handleItemClick = (item) => {
+        const page = pages.find(p => p.id === item.pageId);
+        if (page) {
+            onNavigate(page.id);
+        }
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[999] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center text-white animate-in fade-in p-4">
+            {/* Pulsing Visual */}
+            <div className="relative mb-8">
+                <div className={`absolute inset-0 bg-blue-500 blur-3xl ${isProcessing ? 'animate-ping' : 'animate-pulse'} opacity-40`}></div>
+                <div className={`w-28 h-28 bg-slate-800 rounded-full border-4 ${searchResult?.match ? 'border-green-500' : searchResult ? 'border-red-500' : 'border-blue-500'} flex items-center justify-center relative z-10 shadow-2xl`}>
+                    <Mic size={44} className={`${isProcessing ? 'text-yellow-400 animate-bounce' : searchResult?.match ? 'text-green-400' : 'text-blue-400'}`} />
+                </div>
+            </div>
+            
+            <h2 className="text-xl font-black tracking-wider uppercase mb-2">{status}</h2>
+            
+            {resultText && (
+                <div className="bg-slate-800/50 px-4 py-2 rounded-full border border-slate-600 mb-4">
+                    <p className="text-lg font-mono text-yellow-400">"{resultText}"</p>
+                </div>
+            )}
+            
+            {searchResult?.interpretedAs && searchResult.interpretedAs !== resultText.toLowerCase() && (
+                <p className="text-xs text-slate-400 mb-4">Interpreted as: <span className="text-blue-400">{searchResult.interpretedAs}</span></p>
+            )}
+
+            {/* Results List */}
+            {searchResult?.match && (
+                <div className="w-full max-w-md max-h-60 overflow-y-auto space-y-2 mt-4">
+                    {searchResult.items.slice(0, 5).map(item => (
+                        <div 
+                            key={item.id} 
+                            onClick={() => handleItemClick(item)}
+                            className="bg-slate-800/80 p-4 rounded-xl border border-slate-600 flex justify-between items-center cursor-pointer hover:bg-slate-700 transition-colors"
+                        >
+                            <div>
+                                <p className="font-bold text-lg">{item.car}</p>
+                                <span className="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">
+                                    {item.pageName || 'Unknown'}
+                                </span>
+                            </div>
+                            <div className="text-right">
+                                <span className={`block text-2xl font-bold ${item.qty < 5 ? 'text-red-400' : 'text-green-400'}`}>{item.qty}</span>
+                                <span className="text-[10px] text-slate-500">Pcs</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            
+            <button 
+                onClick={onClose} 
+                className="mt-8 px-8 py-3 border border-white/20 rounded-full text-sm font-bold bg-white/5 hover:bg-white/10 transition-colors flex items-center gap-2"
+            >
+                <X size={16} /> Close
+            </button>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------
+// 📦 DEAD STOCK ALERT COMPONENT (No Price, Only Qty)
+// ---------------------------------------------------------
+const DeadStockAlert = ({ data, onNavigate }) => {
+    const DEAD_DAYS_THRESHOLD = 180; // 6 Months
+
+    const deadStockStats = useMemo(() => {
+        if (!data.entries || data.entries.length === 0) return { count: 0, totalQty: 0, items: [] };
+
+        const now = Date.now();
+        const msInDay = 1000 * 60 * 60 * 24;
+        
+        // Find items older than 180 days that still have stock
+        const deadItems = data.entries.filter(item => {
+            const itemTime = item.lastUpdated || item.id; 
+            const diffDays = (now - itemTime) / msInDay;
+            return diffDays > DEAD_DAYS_THRESHOLD && item.qty > 0;
+        });
+
+        // Calculate total pieces
+        const totalQty = deadItems.reduce((acc, curr) => acc + curr.qty, 0);
+
+        return {
+            count: deadItems.length,
+            totalQty: totalQty,
+            items: deadItems
+        };
+    }, [data.entries]);
+
+    if (deadStockStats.count === 0) return null;
+
+    return (
+        <div className="mx-4 mt-4 bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 rounded-lg p-4 shadow-sm">
+            <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-3">
+                    <div className="bg-red-100 p-2.5 rounded-full text-red-600 shadow-sm">
+                        <PackageX size={22} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-red-800 text-lg">Dead Stock Alert</h3>
+                        <p className="text-xs text-red-600 font-semibold opacity-80">
+                            {deadStockStats.count} items stuck &gt; 6 Months
+                        </p>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <p className="text-[10px] uppercase font-bold text-red-500 tracking-wider">Stuck Inventory</p>
+                    <h2 className="text-2xl font-black text-red-700">
+                        {deadStockStats.totalQty} <span className="text-sm font-bold">Units</span>
+                    </h2>
+                </div>
+            </div>
+
+            <details className="group">
+                <summary className="cursor-pointer text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 mt-2 select-none border-t border-red-200 pt-2 list-none">
+                    <TrendingDown size={14}/> View Dead Stock List
+                    <ChevronDown size={14} className="ml-auto group-open:rotate-180 transition-transform" />
+                </summary>
+                
+                <div className="mt-3 space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {deadStockStats.items.map(item => {
+                        const page = data.pages.find(p => p.id === item.pageId);
+                        const daysSinceUpdate = Math.floor((Date.now() - (item.lastUpdated || item.id)) / (1000 * 60 * 60 * 24));
+                        
+                        return (
+                            <div 
+                                key={item.id} 
+                                onClick={() => onNavigate && onNavigate(item.pageId)}
+                                className="bg-white p-3 rounded-lg border border-red-100 flex justify-between items-center shadow-sm cursor-pointer hover:bg-red-50 transition-colors"
+                            >
+                                <div>
+                                    <p className="font-bold text-gray-800">{item.car}</p>
+                                    <div className="flex gap-2 mt-1">
+                                        <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                            📍 {page?.itemName || 'Unknown'}
+                                        </span>
+                                        <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                                            {daysSinceUpdate} days old
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-xl font-bold text-red-600">{item.qty}</span>
+                                    <span className="text-[9px] text-red-400">Pcs</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </details>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------
+// 📊 QUICK STATS WIDGET (Business Insights)
+// ---------------------------------------------------------
+const QuickStats = ({ data }) => {
+    const stats = useMemo(() => {
+        const entries = data.entries || [];
+        const totalItems = entries.length;
+        const totalStock = entries.reduce((acc, e) => acc + (e.qty || 0), 0);
+        const lowStock = entries.filter(e => e.qty < (data.settings?.limit || 5)).length;
+        const outOfStock = entries.filter(e => e.qty === 0).length;
+        
+        return { totalItems, totalStock, lowStock, outOfStock };
+    }, [data.entries, data.settings?.limit]);
+
+    return (
+        <div className="mx-4 mt-4 grid grid-cols-4 gap-2">
+            <div className="bg-blue-50 p-3 rounded-xl text-center border border-blue-100">
+                <p className="text-2xl font-black text-blue-600">{stats.totalItems}</p>
+                <p className="text-[10px] font-bold text-blue-500 uppercase">Items</p>
+            </div>
+            <div className="bg-green-50 p-3 rounded-xl text-center border border-green-100">
+                <p className="text-2xl font-black text-green-600">{stats.totalStock}</p>
+                <p className="text-[10px] font-bold text-green-500 uppercase">Total Pcs</p>
+            </div>
+            <div className="bg-yellow-50 p-3 rounded-xl text-center border border-yellow-100">
+                <p className="text-2xl font-black text-yellow-600">{stats.lowStock}</p>
+                <p className="text-[10px] font-bold text-yellow-500 uppercase">Low</p>
+            </div>
+            <div className="bg-red-50 p-3 rounded-xl text-center border border-red-100">
+                <p className="text-2xl font-black text-red-600">{stats.outOfStock}</p>
+                <p className="text-[10px] font-bold text-red-500 uppercase">Empty</p>
+            </div>
+        </div>
+    );
 };
 
 // --- SUB-COMPONENTS ---
@@ -1096,7 +1556,7 @@ const ImageModal = ({ src, onClose, onDelete }) => {
 };
 
 
-const NavBtn = ({ icon, label, active, onClick, alert }) => (
+const NavBtn = ({ icon, label, active, onClick, alert, isDark }: any) => (
   <button onClick={onClick} className={`relative flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${active ? 'text-blue-600 bg-blue-50 dark:bg-slate-800 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
     {icon && React.createElement(icon, { size: 24, strokeWidth: active ? 2.5 : 2 })}
     <span className="text-[10px] font-bold mt-1 text-center leading-none">{label}</span>
@@ -1134,6 +1594,19 @@ function DukanRegister() {
   const [view, setView] = useState('generalIndex'); 
   const [activePageId, setActivePageId] = useState(null);
   const [activeToolId, setActiveToolId] = useState(null);
+  
+  // 👻 GHOST MIC STATE
+  const [isGhostMicOpen, setIsGhostMicOpen] = useState(false);
+  const [shakeEnabled, setShakeEnabled] = useState(true);
+  
+  // 📳 SHAKE SENSOR HOOK - Activates Ghost Mic on shake
+  useShakeSensor(() => {
+    if (!isGhostMicOpen && user && !authLoading && !dbLoading) {
+      console.log('🔔 Shake detected! Opening Ghost Mic...');
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      setIsGhostMicOpen(true);
+    }
+  }, shakeEnabled);
 
   // Upload concurrency control to avoid heavy CPU/network bursts
   const uploadConcurrency = useRef(0);
@@ -1271,10 +1744,10 @@ function DukanRegister() {
 
         // Merge transient local state (previewUrl, uploading/progress/tempBlob, uploadFailed)
         const localBills = (dataRef.current && dataRef.current.bills) ? dataRef.current.bills : [];
-        const localMap = new Map(localBills.map(b => [b.id, b]));
+        const localMap = new Map(localBills.map((b: any) => [b.id, b]));
 
-        const mergedBills = (cloudData.bills || []).map(cb => {
-          const local = localMap.get(cb.id);
+        const mergedBills = (cloudData.bills || []).map((cb: any) => {
+          const local: any = localMap.get(cb.id);
           if (!local) return cb;
           return { ...cb,
             previewUrl: local.previewUrl || local.image || null,
@@ -1286,8 +1759,8 @@ function DukanRegister() {
         });
 
         // Include any local-only bills (not yet in cloud) at the front so they remain visible
-        const cloudIds = new Set((cloudData.bills || []).map(b => b.id));
-        const localOnly = localBills.filter(b => !cloudIds.has(b.id));
+        const cloudIds = new Set((cloudData.bills || []).map((b: any) => b.id));
+        const localOnly = localBills.filter((b: any) => !cloudIds.has(b.id));
 
         const finalData = { ...cloudData, bills: [...localOnly, ...mergedBills] };
 
@@ -1445,9 +1918,9 @@ function DukanRegister() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        const blobAtQuality = (q) => new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', q));
+        const blobAtQuality = (q: number): Promise<Blob | null> => new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', q));
 
-        let bestBlob = null;
+        let bestBlob: Blob | null = null;
 
         while (true) {
           canvas.width = width;
@@ -1460,7 +1933,7 @@ function DukanRegister() {
             if (quick && quick.size <= TARGET_MAX) return quick;
 
             // Binary search over quality to reduce iterations
-            let low = 0.35, high = 0.85, candidate = null;
+            let low = 0.35, high = 0.85, candidate: Blob | null = null;
             for (let i = 0; i < 5; i++) {
             const mid = (low + high) / 2;
             const blob = await blobAtQuality(mid);
@@ -1556,7 +2029,7 @@ function DukanRegister() {
       // Schedule the heavy work to avoid overloading CPU/network when many images selected
       scheduleUpload(async () => {
         try {
-          const compressedBlob = await compressImage(file);
+          const compressedBlob = await compressImage(file) as Blob;
           console.log('Compressed blob size:', compressedBlob.size);
           const storageRef = ref(storage, storagePath);
 
@@ -1696,7 +2169,7 @@ function DukanRegister() {
   useEffect(() => {
     const metaTags = [{ name: "theme-color", content: data.settings.theme === 'dark' ? '#0f172a' : '#ffffff' }];
     metaTags.forEach(tag => {
-        let meta = document.querySelector(`meta[name="${tag.name}"]`);
+        let meta = document.querySelector(`meta[name="${tag.name}"]`) as HTMLMetaElement | null;
         if (!meta) { meta = document.createElement('meta'); meta.name = tag.name; document.head.appendChild(meta); }
         meta.content = tag.content;
     });
@@ -2072,6 +2545,14 @@ function DukanRegister() {
           </h1>
           <div className="flex gap-2">
               {isOnline ? <Wifi className="text-green-600"/> : <WifiOff className="text-red-500 animate-pulse"/>}
+              {/* 👻 Ghost Mic Button */}
+              <button 
+                onClick={() => setIsGhostMicOpen(true)} 
+                className={`p-2 rounded-full border ${isDark ? 'bg-slate-700 border-slate-500 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'} hover:scale-110 transition-transform`}
+                title="Voice Search (or shake phone)"
+              >
+                <Mic size={20} />
+              </button>
               <TranslateBtn />
           </div>
         </div>
@@ -2084,6 +2565,15 @@ function DukanRegister() {
             <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} />
         </div>
       </div>
+
+      {/* 📊 QUICK STATS WIDGET */}
+      <QuickStats data={data} />
+
+      {/* 📦 DEAD STOCK ALERT */}
+      <DeadStockAlert 
+        data={data} 
+        onNavigate={(pageId) => { setActivePageId(pageId); setView('page'); }} 
+      />
 
       {data.settings.pinnedTools && data.settings.pinnedTools.length > 0 && (
         <div className={`py-3 px-4 border-b overflow-x-auto whitespace-nowrap flex gap-3 hide-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
@@ -2383,6 +2873,24 @@ function DukanRegister() {
              </div>
            </div>
 
+           {/* 📳 SHAKE TO SEARCH TOGGLE */}
+           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
+             <div className="flex justify-between items-center">
+                 <div>
+                   <h3 className="font-bold flex items-center gap-2">
+                     <Activity size={16} className="text-blue-500" /> {t("Shake to Search")}
+                   </h3>
+                   <p className="text-xs opacity-70">{t("Shake phone to activate voice search")}</p>
+                 </div>
+                 <button 
+                   onClick={() => setShakeEnabled(!shakeEnabled)} 
+                   className={`px-3 py-1 rounded font-bold flex items-center gap-2 text-xs border ${shakeEnabled ? 'bg-blue-100 text-blue-700 border-blue-500' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
+                 >
+                   {shakeEnabled ? <><CheckCircle size={14}/> ON</> : 'OFF'}
+                 </button>
+             </div>
+           </div>
+
            <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
              <label className="font-bold block mb-2">{t("Low Stock Limit Alert")}</label>
              <div className="flex items-center gap-4 mb-2">
@@ -2443,6 +2951,20 @@ function DukanRegister() {
       <audio ref={audioRef} src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
 
       {toast && <ToastMessage message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      {/* 👻 GHOST MIC OVERLAY - Voice Search with AI */}
+      {isGhostMicOpen && (
+        <GhostMic 
+          inventory={data.entries || []}
+          pages={data.pages || []}
+          onClose={() => setIsGhostMicOpen(false)}
+          onNavigate={(pageId) => {
+            setActivePageId(pageId);
+            setView('page');
+            setIsGhostMicOpen(false);
+          }}
+        />
+      )}
       
       <ImageModal src={viewImage} onClose={()=>setViewImage(null)} onDelete={()=>handleDeleteBill(data.bills.find(b => b.image === viewImage || b === viewImage))} />
 
