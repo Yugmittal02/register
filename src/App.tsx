@@ -19,7 +19,17 @@ import {
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
+import { 
+  getFirestore, 
+  doc, 
+  onSnapshot, 
+  setDoc, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  memoryLocalCache,
+  CACHE_SIZE_UNLIMITED
+} from "firebase/firestore";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -43,214 +53,120 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// Initialize Firestore with modern cache settings (fixes deprecation warning)
+let db: ReturnType<typeof getFirestore>;
+try {
+  // Try persistent multi-tab cache first
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+      cacheSizeBytes: CACHE_SIZE_UNLIMITED
+    })
+  });
+  console.info('✅ Firestore initialized with persistent multi-tab cache');
+} catch (err: any) {
+  // If IndexedDB has version issues, clear it and use memory cache
+  if (err?.message?.includes('not compatible') || err?.code === 'failed-precondition') {
+    console.warn('⚠️ Clearing incompatible IndexedDB cache...');
+    try {
+      // Clear the problematic IndexedDB
+      indexedDB.deleteDatabase('firestore/[DEFAULT]/arvindregister-353e5/main');
+      // Fall back to memory cache for this session
+      db = initializeFirestore(app, {
+        localCache: memoryLocalCache()
+      });
+      console.info('✅ Firestore initialized with memory cache (cleared old data)');
+    } catch {
+      db = getFirestore(app);
+      console.info('✅ Firestore initialized with default settings');
+    }
+  } else {
+    // Default fallback
+    db = getFirestore(app);
+    console.info('✅ Firestore initialized with default settings');
+  }
+}
+
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-// Fix for Multi-Tab Persistence Error
-// Attempt to enable multi-tab IndexedDB persistence first (preferred for shared access).
-// Persistence owner coordination to avoid multiple tabs enabling persistence concurrently
-// and causing Firestore INTERNAL ASSERTION errors about exclusive access.
-(function () {
-  const DISABLED_KEY = 'dukan:firestore-persistence-disabled';
-  const OWNER_KEY = 'dukan:firestore-persistence-owner';
-  const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-  const HEARTBEAT_MS = 5000;
-  const FIRESTORE_ERROR_KEY = 'dukan:firestore-persistence-error';
-  const FIRESTORE_ERROR_PATTERNS = [
-    'Failed to obtain exclusive access to the persistence layer',
-    'Failed to obtain primary lease',
-    'INTERNAL ASSERTION FAILED'
-  ];
-  const SUPPRESS_DURATION_MS = 60_000;
+// ---------------------------------------------------------
+// 🚀 SMART PERFORMANCE UTILITIES
+// ---------------------------------------------------------
 
-  if (localStorage.getItem(DISABLED_KEY) === '1') {
-    console.info('Skipping Firestore persistence (previously disabled)');
-    return;
+// Debounce utility for search inputs
+const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+};
+
+// Throttle utility for frequent updates
+const throttle = <T extends (...args: any[]) => any>(fn: T, limit: number) => {
+  let inThrottle = false;
+  return (...args: Parameters<T>) => {
+    if (!inThrottle) {
+      fn(...args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+};
+
+// Smart memoization with LRU cache
+class LRUCache<K, V> {
+  private cache = new Map<K, V>();
+  constructor(private maxSize: number = 100) {}
+  
+  get(key: K): V | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
   }
-
-  let heartbeatTimer = null;
-  let suppressionActive = false;
-  const setOwner = () => {
-    try {
-      localStorage.setItem(OWNER_KEY, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
-    } catch {
-      /* noop */
+  
+  set(key: K, value: V): void {
+    if (this.cache.size >= this.maxSize) {
+      // Delete oldest entry
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) this.cache.delete(firstKey);
     }
-  };
-  const clearOwner = () => {
-    try {
-      const raw = localStorage.getItem(OWNER_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.id === TAB_ID) localStorage.removeItem(OWNER_KEY);
-    } catch { /* noop */ }
-  };
+    this.cache.set(key, value);
+  }
+  
+  clear(): void {
+    this.cache.clear();
+  }
+}
 
-  const tryEnable = async () => {
-    try {
-      // Quick check: if another owner exists and is recent, don't attempt to become owner.
-      const raw = localStorage.getItem(OWNER_KEY);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed && (Date.now() - parsed.ts) < HEARTBEAT_MS * 2) {
-            console.info('Another tab appears to own persistence; skipping enable');
-            return;
-          }
-        } catch { /* fall through */ }
-      }
+// Search results cache
+const searchCache = new LRUCache<string, any[]>(50);
 
-      // Become owner and attempt to enable multi-tab persistence
-      setOwner();
-      if (typeof enableMultiTabIndexedDbPersistence === 'function') {
-        await enableMultiTabIndexedDbPersistence(db);
-        console.info('Firestore multi-tab persistence enabled by owner', TAB_ID);
-      } else {
-        // Some SDKs support enableIndexedDbPersistence with synchronizeTabs flag
-        try {
-          await enableIndexedDbPersistence(db, { synchronizeTabs: true });
-          console.info('Firestore persistence with synchronizeTabs enabled by owner', TAB_ID);
-        } catch (inner) {
-          console.warn('synchronizeTabs attempt failed', inner);
-          try {
-            await enableIndexedDbPersistence(db);
-            console.info('Firestore single-tab persistence enabled by owner', TAB_ID);
-          } catch (err2) {
-            if (err2 && err2.code === 'failed-precondition') {
-              console.warn('Persistence unavailable: another tab has exclusive access. Disabling persistence attempts.');
-              localStorage.setItem(DISABLED_KEY, '1');
-              clearOwner();
-            } else if (err2 && err2.code === 'unimplemented') {
-              console.warn('Persistence is not supported by this browser.');
-              localStorage.setItem(DISABLED_KEY, '1');
-              clearOwner();
-            } else {
-              console.warn('Unexpected error enabling IndexedDB persistence', err2);
-              clearOwner();
-            }
-          }
-        }
-      }
-
-      // If we got here and persistence seems enabled, keep a heartbeat to show liveness
-      heartbeatTimer = setInterval(() => {
-        setOwner();
-      }, HEARTBEAT_MS);
-
-      // Remove owner on unload
-      window.addEventListener('beforeunload', () => {
-        clearOwner();
-      });
-    } catch (err) {
-      // If we see repeated SDK assertion failures, mark persistence disabled
-      console.warn('Unexpected error while attempting to enable persistence', err);
-      localStorage.setItem(DISABLED_KEY, '1');
-      localStorage.setItem(FIRESTORE_ERROR_KEY, JSON.stringify({ ts: Date.now(), msg: String(err && err.message ? err.message : err) }));
-      clearOwner();
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
-      // Activate short-term suppression of matching console messages
-      suppressionActive = true;
-      wrapConsoleSuppression();
-    }
-  };
-
-  const handleFirestoreError = (message) => {
-    if (suppressionActive) return;
-    if (!message) return;
-    if (!FIRESTORE_ERROR_PATTERNS.some(p => message.includes(p))) return;
-    try {
-      console.warn('Detected Firestore persistence contention, disabling further attempts');
-      localStorage.setItem(DISABLED_KEY, '1');
-      localStorage.setItem(FIRESTORE_ERROR_KEY, JSON.stringify({ ts: Date.now(), msg: message }));
-      clearOwner();
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
-      suppressionActive = true;
-      wrapConsoleSuppression();
-    } catch {
-      /* noop */
-    }
-  };
-
-  const wrapConsoleSuppression = () => {
-    const origWarn = console.warn.bind(console);
-    const origError = console.error.bind(console);
-    console.warn = (...args) => {
-      if (args.some(a => typeof a === 'string' && FIRESTORE_ERROR_PATTERNS.some(p => a.includes(p)))) return;
-      origWarn(...args);
-    };
-    console.error = (...args) => {
-      if (args.some(a => typeof a === 'string' && FIRESTORE_ERROR_PATTERNS.some(p => a.includes(p)))) return;
-      origError(...args);
-    };
-    setTimeout(() => {
-      console.warn = origWarn;
-      console.error = origError;
-      suppressionActive = false;
-    }, SUPPRESS_DURATION_MS);
-  };
-
-  // React to storage events so that if a new owner appears we back off
-  window.addEventListener('storage', (ev) => {
-    if (ev.key === OWNER_KEY && ev.newValue) {
-      try {
-        const parsed = JSON.parse(ev.newValue);
-        if (parsed && parsed.id !== TAB_ID) {
-          // Another tab became owner; stop our heartbeat
-          if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
-        }
-      } catch { /* noop */ }
-    }
-    if (ev.key === FIRESTORE_ERROR_KEY && ev.newValue) {
-      // If another tab reports an error, also activate local suppression and mark disabled
-      try { const parsed = JSON.parse(ev.newValue); handleFirestoreError(parsed.msg || String(ev.newValue)); } catch { handleFirestoreError(String(ev.newValue)); }
+// Expose diagnostics for debugging
+try { 
+  (window as any).__dukan_tabId = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`; 
+  (window as any).__dukan_dumpDiagnostics = () => ({
+    tabId: (window as any).__dukan_tabId,
+    cacheSize: searchCache,
+    localStorage: {
+      backup: localStorage.getItem('dukan:backup') ? 'exists' : 'none',
+      pendingDeletes: localStorage.getItem('dukan:pendingDeletes')
     }
   });
-
-  // Also listen to global errors/unhandled rejections so we can react quickly
-  const globalErrorHandler = (ev) => {
-    try {
-      const msg = ev && (ev.reason?.message || ev.message || String(ev));
-      handleFirestoreError(msg);
-      if (msg && msg.includes('Invalid hook call')) {
-        // Log diagnostics for invalid hook call to help debugging
-        try {
-          console.error('Invalid hook call detected. Diagnostics:', {
-            reactVersion: React && React.version,
-            reactDomVersion: (window && window.ReactDOM && window.ReactDOM.version) || null,
-            dukanTabDiagnostics: window.__dukan_dumpDiagnostics ? window.__dukan_dumpDiagnostics() : null,
-            location: window.location.href
-          });
-        } catch { /* noop */ }
-        try { localStorage.setItem('dukan:invalid-hook', JSON.stringify({ ts: Date.now(), msg })); } catch { /* noop */ }
-      }
-    } catch { /* noop */ }
-  };
-  window.addEventListener('unhandledrejection', globalErrorHandler);
-  window.addEventListener('error', (ev) => { globalErrorHandler(ev); });
-
-  // Start attempt after small delay to allow other tabs to set up first
-  setTimeout(tryEnable, 400);
-  // Expose lightweight diagnostics to make runtime debugging easier
-  try { window.__dukan_tabId = TAB_ID; } catch { /* noop */ }
-  try {
-    window.__dukan_dumpDiagnostics = () => ({
-      tabId: TAB_ID,
-      owner: localStorage.getItem(OWNER_KEY),
-      disabled: localStorage.getItem(DISABLED_KEY),
-      lastError: localStorage.getItem(FIRESTORE_ERROR_KEY),
-      pendingDeletes: localStorage.getItem('dukan:pendingDeletes')
-    });
-  } catch { /* noop */ }
-})();
+} catch { /* noop */ }
 
 // ---------------------------------------------------------
 // 🧠 TRANSLATION ENGINE
-    // Delete a bill (remove from storage if present and update cloud)
 // ---------------------------------------------------------
 const translationCache = new Map(); 
 
-const exactDictionary = {
+const exactDictionary: Record<string, string> = {
   "brake": "ब्रेक", "pads": "पैड्स", "shoe": "शू", "oil": "तेल", "filter": "फिल्टर",
   "light": "लाइट", "headlight": "हेडलाइट", "bumper": "बम्पर", "cover": "कवर",
   "seat": "सीट", "mat": "मैट", "guard": "गार्ड", "horn": "हॉर्न", "mirror": "शीशा",
@@ -780,20 +696,32 @@ const QuickStats = ({ data }) => {
 
     return (
         <div className="mx-4 mt-4 grid grid-cols-4 gap-2">
-            <div className="bg-blue-50 p-3 rounded-xl text-center border border-blue-100">
-                <p className="text-2xl font-black text-blue-600">{stats.totalItems}</p>
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-2xl text-center border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="bg-blue-500 w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-blue-500/30">
+                    <Layers size={16} className="text-white" />
+                </div>
+                <p className="text-2xl font-black text-blue-700">{stats.totalItems}</p>
                 <p className="text-[10px] font-bold text-blue-500 uppercase">Items</p>
             </div>
-            <div className="bg-green-50 p-3 rounded-xl text-center border border-green-100">
-                <p className="text-2xl font-black text-green-600">{stats.totalStock}</p>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-2xl text-center border border-green-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="bg-green-500 w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-green-500/30">
+                    <Activity size={16} className="text-white" />
+                </div>
+                <p className="text-2xl font-black text-green-700">{stats.totalStock}</p>
                 <p className="text-[10px] font-bold text-green-500 uppercase">Total Pcs</p>
             </div>
-            <div className="bg-yellow-50 p-3 rounded-xl text-center border border-yellow-100">
-                <p className="text-2xl font-black text-yellow-600">{stats.lowStock}</p>
-                <p className="text-[10px] font-bold text-yellow-500 uppercase">Low</p>
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-100 p-3 rounded-2xl text-center border border-yellow-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="bg-yellow-500 w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-yellow-500/30">
+                    <AlertCircle size={16} className="text-white" />
+                </div>
+                <p className="text-2xl font-black text-yellow-700">{stats.lowStock}</p>
+                <p className="text-[10px] font-bold text-yellow-600 uppercase">Low</p>
             </div>
-            <div className="bg-red-50 p-3 rounded-xl text-center border border-red-100">
-                <p className="text-2xl font-black text-red-600">{stats.outOfStock}</p>
+            <div className="bg-gradient-to-br from-red-50 to-red-100 p-3 rounded-2xl text-center border border-red-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="bg-red-500 w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-red-500/30">
+                    <Ban size={16} className="text-white" />
+                </div>
+                <p className="text-2xl font-black text-red-700">{stats.outOfStock}</p>
                 <p className="text-[10px] font-bold text-red-500 uppercase">Empty</p>
             </div>
         </div>
@@ -837,11 +765,18 @@ const ToastMessage = ({ message, type, onClose }) => {
   }, [onClose]);
 
   return (
-    <div className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 transition-all transform animate-in fade-in slide-in-from-top-4 border-2 border-white/20 ${
-      type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
-    }`}>
-       {type === 'error' ? <XCircle size={22} className="shrink-0"/> : <CheckCircle size={22} className="shrink-0"/>}
-       <span className="font-bold text-sm md:text-base whitespace-nowrap">{message}</span>
+    <div className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 transition-all transform border backdrop-blur-sm ${
+      type === 'error' 
+        ? 'bg-red-600/95 text-white border-red-400/30 shadow-red-500/25' 
+        : 'bg-green-600/95 text-white border-green-400/30 shadow-green-500/25'
+    }`} style={{animation: 'slideDown 0.3s ease-out'}}>
+       <div className={`p-1.5 rounded-full ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`}>
+         {type === 'error' ? <XCircle size={18} className="shrink-0"/> : <CheckCircle size={18} className="shrink-0"/>}
+       </div>
+       <span className="font-semibold text-sm md:text-base">{message}</span>
+       <button onClick={onClose} className="ml-2 p-1 hover:bg-white/20 rounded-full transition-colors">
+         <X size={16} />
+       </button>
     </div>
   );
 };
@@ -1521,18 +1456,87 @@ const EntryRow = React.memo(({ entry, t, isDark, onUpdateBuffer, onEdit, limit, 
 });
 
 const VoiceInput = ({ onResult, isDark }) => {
+  const [isListening, setIsListening] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  
   const startListening = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.lang = 'en-IN'; 
-      recognition.onresult = (e) => onResult(e.results[0][0].transcript);
-      try { recognition.start(); } catch (e) { console.error(e); }
-    } else { alert("Mic Error"); }
+      recognition.lang = 'en-IN';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
+      recognition.onstart = () => {
+        setIsListening(true);
+        setHasError(false);
+        if (navigator.vibrate) navigator.vibrate(100);
+      };
+      
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        // Process through desi dictionary before returning
+        let processed = transcript.toLowerCase();
+        Object.keys(synonymMap).forEach(key => {
+            const regex = new RegExp(`\\b${key}\\b`, 'gi');
+            if (regex.test(processed)) {
+                processed = processed.replace(regex, synonymMap[key]);
+            }
+        });
+        onResult(processed);
+        setIsListening(false);
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      };
+      
+      recognition.onerror = (e) => {
+        console.warn('Speech recognition error:', e.error);
+        setIsListening(false);
+        setHasError(true);
+        
+        // Handle specific errors
+        if (e.error === 'network') {
+          // Offline - show visual feedback
+          console.info('Voice search requires internet connection');
+        } else if (e.error === 'no-speech') {
+          // No speech detected - that's OK
+          setHasError(false);
+        }
+        
+        // Clear error state after 2 seconds
+        setTimeout(() => setHasError(false), 2000);
+      };
+      
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      
+      try { 
+        recognition.start(); 
+      } catch (e) { 
+        console.error('Failed to start voice recognition:', e); 
+        setHasError(true);
+        setTimeout(() => setHasError(false), 2000);
+      }
+    } else { 
+      alert("Voice input not supported in this browser. Please type manually."); 
+    }
   };
+  
   return (
-    <button onClick={startListening} className={`p-3 rounded-full shrink-0 ${isDark ? 'bg-slate-700 text-white' : 'bg-gray-100 text-black hover:bg-gray-200'}`}>
-      <Mic size={20}/>
+    <button 
+      onClick={startListening} 
+      disabled={isListening}
+      className={`p-3 rounded-full shrink-0 transition-all ${
+        isListening 
+          ? 'bg-red-500 text-white animate-pulse' 
+          : hasError
+            ? 'bg-yellow-500 text-white'
+            : isDark 
+              ? 'bg-slate-700 text-white hover:bg-slate-600' 
+              : 'bg-gray-100 text-black hover:bg-gray-200'
+      }`}
+    >
+      <Mic size={20} className={isListening ? 'animate-bounce' : ''}/>
     </button>
   );
 };
@@ -1557,10 +1561,28 @@ const ImageModal = ({ src, onClose, onDelete }) => {
 
 
 const NavBtn = ({ icon, label, active, onClick, alert, isDark }: any) => (
-  <button onClick={onClick} className={`relative flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${active ? 'text-blue-600 bg-blue-50 dark:bg-slate-800 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500'}`}>
-    {icon && React.createElement(icon, { size: 24, strokeWidth: active ? 2.5 : 2 })}
-    <span className="text-[10px] font-bold mt-1 text-center leading-none">{label}</span>
-    {alert && <span className="absolute top-1 right-3 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-bounce"></span>}
+  <button 
+    onClick={onClick} 
+    className={`relative flex-1 flex flex-col items-center py-2 px-1 rounded-2xl transition-all duration-200 ${
+      active 
+        ? isDark 
+          ? 'text-blue-400 bg-blue-500/20' 
+          : 'text-blue-600 bg-blue-100 shadow-sm' 
+        : isDark 
+          ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800' 
+          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+    }`}
+  >
+    <div className={`p-1.5 rounded-xl transition-all ${active ? isDark ? 'bg-blue-500/30' : 'bg-blue-200' : ''}`}>
+      {icon && React.createElement(icon, { size: 22, strokeWidth: active ? 2.5 : 2 })}
+    </div>
+    <span className={`text-[9px] font-bold mt-0.5 text-center leading-none ${active ? 'opacity-100' : 'opacity-70'}`}>{label}</span>
+    {alert && (
+      <span className="absolute top-0 right-2 flex h-3 w-3">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white"></span>
+      </span>
+    )}
   </button>
 );
 
@@ -2425,38 +2447,92 @@ function DukanRegister() {
     return { pages: filteredPages, items: itemsGrouped };
   }, [data.pages, data.entries, indexSearchTerm]);
 
+  // 🔍 SMART SEARCH WITH CACHING & FUZZY MATCHING
   const filteredStock = useMemo(() => {
       if (!stockSearchTerm || stockSearchTerm.trim() === '') return [];
-      const term = stockSearchTerm.toLowerCase();
-      return (data.entries || []).filter(e => e.car && e.car.toLowerCase().includes(term));
-  }, [data.entries, stockSearchTerm]);
+      
+      const term = stockSearchTerm.toLowerCase().trim();
+      
+      // Check cache first
+      const cacheKey = `stock:${term}`;
+      const cached = searchCache.get(cacheKey);
+      if (cached) return cached;
+      
+      // Use smart search algorithm for better results
+      const smartResult = performSmartSearch(term, data.entries || [], data.pages || []);
+      
+      let results: any[];
+      if (smartResult.match && smartResult.items.length > 0) {
+          // Use smart search results (fuzzy matched)
+          results = smartResult.items;
+      } else {
+          // Fallback to basic contains search
+          results = (data.entries || []).filter(e => 
+              e.car && e.car.toLowerCase().includes(term)
+          );
+      }
+      
+      // Cache results
+      searchCache.set(cacheKey, results);
+      return results;
+  }, [data.entries, data.pages, stockSearchTerm]);
 
+  // Optimized page search with caching
   const pageViewData = useMemo(() => {
       if (!activePage) return { filteredEntries: [], grandTotal: 0 };
       
       const pageEntries = (data.entries || []).filter(e => e.pageId === activePage.id);
-      const safeSearch = pageSearchTerm ? pageSearchTerm.toLowerCase() : '';
+      const safeSearch = pageSearchTerm ? pageSearchTerm.toLowerCase().trim() : '';
       
-      const filtered = pageEntries.filter(e => e.car && e.car.toLowerCase().includes(safeSearch));
+      let filtered: any[];
+      if (safeSearch) {
+          // Check cache
+          const cacheKey = `page:${activePage.id}:${safeSearch}`;
+          const cached = searchCache.get(cacheKey);
+          if (cached) {
+              filtered = cached;
+          } else {
+              // Smart fuzzy filter
+              const smartResult = performSmartSearch(safeSearch, pageEntries, data.pages || []);
+              if (smartResult.match && smartResult.items.length > 0) {
+                  filtered = smartResult.items;
+              } else {
+                  filtered = pageEntries.filter(e => e.car && e.car.toLowerCase().includes(safeSearch));
+              }
+              searchCache.set(cacheKey, filtered);
+          }
+      } else {
+          filtered = pageEntries;
+      }
+      
       const total = pageEntries.reduce((acc, curr) => { 
           const val = tempChanges[curr.id] !== undefined ? tempChanges[curr.id] : curr.qty; 
           return acc + val; 
       }, 0);
       return { filteredEntries: filtered, grandTotal: total };
-  }, [data.entries, activePage, pageSearchTerm, tempChanges]);
+  }, [data.entries, data.pages, activePage, pageSearchTerm, tempChanges]);
 
   // --------------------------------------------------------------------------
 
   const TranslateBtn = () => (
-    <button onClick={() => setIsHindi(!isHindi)} className={`p-2 rounded-full border ${isDark ? 'bg-slate-700 border-slate-500' : 'bg-white/50 border-black/10'}`}> <Languages size={20}/> </button>
+    <button onClick={() => setIsHindi(!isHindi)} className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'bg-slate-700 border-slate-500 hover:bg-slate-600' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}> 
+      <Languages size={18} className={isHindi ? 'text-orange-500' : ''}/> 
+    </button>
   );
 
   const renderSaveButton = () => {
       const count = Object.keys(tempChanges).length;
       if (count === 0) return null;
       return (
-          <button onClick={openSaveModal} className="fixed bottom-24 right-6 bg-green-600 text-white px-4 py-3 rounded-full shadow-2xl border-2 border-white flex items-center gap-3 z-50 animate-bounce cursor-pointer hover:bg-green-700 transition-colors">
-            <SaveAll size={20} /> <span className="font-bold text-sm">{t("Update")} ({count})</span>
+          <button 
+            onClick={openSaveModal} 
+            className="fixed bottom-24 right-6 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-5 py-3.5 rounded-2xl shadow-2xl shadow-green-500/40 flex items-center gap-3 z-50 cursor-pointer hover:from-green-500 hover:to-emerald-500 transition-all group"
+            style={{animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'}}
+          >
+            <div className="bg-white/20 p-1.5 rounded-lg group-hover:bg-white/30 transition-colors">
+              <SaveAll size={18} />
+            </div>
+            <span className="font-bold text-sm">{t("Update")} ({count})</span>
           </button>
       );
   };
@@ -2465,15 +2541,28 @@ function DukanRegister() {
 
   if (authLoading || (user && dbLoading)) {
       return (
-          <div className="min-h-screen flex flex-col items-center justify-between bg-slate-950 text-white p-10">
-              <div className="flex-1 flex flex-col items-center justify-center gap-8">
+          <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-10">
+              <div className="flex flex-col items-center justify-center gap-8">
+                  {/* Logo Animation */}
+                  <div className="relative">
+                      <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 animate-pulse"></div>
+                      <div className="relative bg-gradient-to-br from-blue-600 to-purple-600 p-6 rounded-3xl shadow-2xl">
+                          <Store size={48} className="text-white" />
+                      </div>
+                  </div>
+                  
                   <div className="text-center">
                     <h1 className="text-3xl font-black tracking-widest text-white mb-2">DUKAN REGISTER</h1>
-                    <div className="h-1 w-24 bg-blue-600 mx-auto rounded-full"></div>
+                    <p className="text-slate-400 text-sm font-medium">Smart Inventory Management</p>
                   </div>
+                  
+                  {/* Loading Spinner */}
                   <div className="relative">
-                      <div className="w-16 h-16 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin"></div>
+                      <div className="w-12 h-12 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 w-12 h-12 border-4 border-transparent border-b-purple-500 rounded-full animate-spin" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
                   </div>
+                  
+                  <p className="text-slate-500 text-xs font-semibold animate-pulse">Loading your data...</p>
               </div>
           </div>
       );
@@ -2481,9 +2570,19 @@ function DukanRegister() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 p-6 text-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-600 rounded-full blur-[120px] opacity-20"></div>
+        <div className="absolute bottom-20 right-10 w-72 h-72 bg-purple-600 rounded-full blur-[120px] opacity-20"></div>
+        
         {toast && <ToastMessage message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-        <div className="w-full max-w-sm bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700">
+        <div className="w-full max-w-sm bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-slate-700/50 relative z-10">
+           {/* Logo */}
+           <div className="flex justify-center mb-6">
+             <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-4 rounded-2xl shadow-lg">
+               <Store size={32} className="text-white" />
+             </div>
+           </div>
            <h1 className="text-2xl font-bold text-center mb-1">Welcome Back</h1>
            <p className="text-center text-slate-400 mb-8 text-sm">Sign in to manage your Dukan</p>
            
@@ -2538,29 +2637,40 @@ function DukanRegister() {
 
   const renderGeneralIndex = () => (
     <div className="pb-24">
-      <div className={`p-6 border-b-4 border-double sticky top-0 z-10 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-yellow-100 border-yellow-400'}`}>
-        <div className="flex justify-between items-center mb-2">
-          <h1 className={`text-2xl font-extrabold uppercase tracking-widest ${isDark ? 'text-white' : 'text-yellow-900'} underline decoration-2 decoration-red-400 truncate`}>
-            {data.settings.shopName || "Dukan Register"}
-          </h1>
-          <div className="flex gap-2">
-              {isOnline ? <Wifi className="text-green-600"/> : <WifiOff className="text-red-500 animate-pulse"/>}
+      <div className={`p-5 sticky top-0 z-10 ${isDark ? 'bg-gradient-to-b from-slate-900 to-slate-900/95' : 'bg-gradient-to-b from-amber-50 to-amber-50/95'} backdrop-blur-lg border-b ${isDark ? 'border-slate-800' : 'border-amber-200'}`}>
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-2xl ${isDark ? 'bg-blue-500/20' : 'bg-amber-200'}`}>
+              <Store size={24} className={isDark ? 'text-blue-400' : 'text-amber-700'} />
+            </div>
+            <div>
+              <h1 className={`text-xl font-extrabold ${isDark ? 'text-white' : 'text-amber-900'} truncate max-w-[180px]`}>
+                {data.settings.shopName || "Dukan Register"}
+              </h1>
+              <p className={`text-[10px] font-semibold ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>Smart Inventory System</p>
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                {isOnline ? <Wifi size={12}/> : <WifiOff size={12} className="animate-pulse"/>}
+                <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+              </div>
               {/* 👻 Ghost Mic Button */}
               <button 
                 onClick={() => setIsGhostMicOpen(true)} 
-                className={`p-2 rounded-full border ${isDark ? 'bg-slate-700 border-slate-500 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'} hover:scale-110 transition-transform`}
+                className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'bg-slate-700 border-slate-500 text-blue-400 hover:bg-slate-600' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
                 title="Voice Search (or shake phone)"
               >
-                <Mic size={20} />
+                <Mic size={18} />
               </button>
               <TranslateBtn />
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-2">
             <div className="relative flex-1">
-                <input className={`w-full pl-9 p-2 rounded border outline-none ${isDark ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-yellow-500 text-black'}`} placeholder={t("Search Index...")} value={indexSearchTerm} onChange={e => setIndexSearchTerm(e.target.value)}/>
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
-                {indexSearchTerm && <button onClick={() => setIndexSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X size={16}/></button>}
+                <input className={`w-full pl-10 pr-10 py-3 rounded-2xl border-2 outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-amber-200 text-black focus:border-amber-500 shadow-sm'}`} placeholder={t("Search Index...")} value={indexSearchTerm} onChange={e => setIndexSearchTerm(e.target.value)}/>
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-slate-400' : 'text-amber-400'}`} size={18}/>
+                {indexSearchTerm && <button onClick={() => setIndexSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"><X size={16}/></button>}
             </div>
             <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} />
         </div>
@@ -2614,10 +2724,15 @@ function DukanRegister() {
               </div>
             </div>
           ))}
-          {globalSearchResults.pages.length === 0 && <div className="p-2 text-center text-gray-400 text-sm">{t("No Pages Found")}</div>}
+          {globalSearchResults.pages.length === 0 && <div className="p-8 text-center text-gray-400">\n            <Book size={48} className="mx-auto mb-3 opacity-30" />\n            <p className="font-semibold">{t("No Pages Found")}</p>\n            <p className="text-xs mt-1">Tap + to create your first page</p>\n          </div>}
         </div>
       </div>
-      <button onClick={() => setIsNewPageOpen(true)} className="fixed bottom-24 right-6 bg-yellow-500 text-black w-16 h-16 rounded-full shadow-xl border-4 border-white flex items-center justify-center active:scale-95 z-20"><Plus size={32} strokeWidth={3}/></button>
+      <button 
+        onClick={() => setIsNewPageOpen(true)} 
+        className="fixed bottom-24 right-6 bg-gradient-to-br from-yellow-500 to-orange-500 text-white w-16 h-16 rounded-2xl shadow-2xl shadow-yellow-500/40 flex items-center justify-center active:scale-90 z-20 hover:from-yellow-400 hover:to-orange-400 transition-all group"
+      >
+        <Plus size={32} strokeWidth={3} className="group-hover:rotate-90 transition-transform duration-200"/>
+      </button>
     </div>
   );
 
@@ -2946,9 +3061,39 @@ function DukanRegister() {
     );
   };
 
+  // Check for pending writes (for sync indicator)
+  const [hasPendingWrites, setHasPendingWrites] = useState(false);
+  
+  useEffect(() => {
+    const checkPending = () => {
+      try {
+        const raw = localStorage.getItem('dukan:pendingWrites');
+        setHasPendingWrites(!!raw && JSON.parse(raw).length > 0);
+      } catch { setHasPendingWrites(false); }
+    };
+    checkPending();
+    const interval = setInterval(checkPending, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+    <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950' : 'bg-white'} ${!isOnline ? 'pt-10' : ''}`}>
       <audio ref={audioRef} src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+      {/* 📡 CONNECTIVITY INDICATORS */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[200] bg-gradient-to-r from-orange-500 to-red-500 text-white py-2 px-4 flex items-center justify-center gap-2 shadow-lg">
+          <WifiOff size={18} className="animate-pulse" />
+          <span className="font-bold text-sm">You're Offline - Changes will sync when connected</span>
+        </div>
+      )}
+      
+      {hasPendingWrites && isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[199] bg-blue-500 text-white py-1 px-4 flex items-center justify-center gap-2 text-xs">
+          <Loader2 size={14} className="animate-spin" />
+          <span className="font-semibold">Syncing pending changes...</span>
+        </div>
+      )}
 
       {toast && <ToastMessage message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
@@ -2995,7 +3140,7 @@ function DukanRegister() {
       
       {renderSaveButton()}
 
-      <div className={`fixed bottom-0 w-full border-t flex justify-between px-2 p-2 pb-safe z-50 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-300'}`}>
+      <div className={`fixed bottom-0 w-full border-t flex justify-between px-1 py-1.5 pb-safe z-50 backdrop-blur-lg ${isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-gray-200 shadow-lg shadow-gray-200/50'}`}>
          <NavBtn icon={Book} label={t("Index")} active={view === 'generalIndex'} onClick={() => { setView('generalIndex'); setActivePageId(null); }} isDark={isDark}/>
          <NavBtn icon={Grid} label={t("Pages")} active={view === 'pagesGrid'} onClick={() => { setView('pagesGrid'); setIndexSearchTerm(''); setActivePageId(null); }} isDark={isDark}/>
          <NavBtn icon={Search} label={t("Search")} active={view === 'stockSearch'} onClick={() => { setView('stockSearch'); setStockSearchTerm(''); }} isDark={isDark}/>
@@ -3005,16 +3150,21 @@ function DukanRegister() {
       </div>
 
       {isNewPageOpen && (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4 text-black">{t("New Page")}</h3>
-            <div className="flex gap-2 mb-4">
-                <input autoFocus className="flex-1 border-2 border-black rounded-lg p-3 text-lg font-bold text-black" placeholder={t("Item Name")} value={input.itemName} onChange={e => setInput({...input, itemName: e.target.value})} />
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="bg-yellow-100 p-3 rounded-2xl">
+                <FilePlus size={24} className="text-yellow-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800">{t("New Page")}</h3>
+            </div>
+            <div className="flex gap-2 mb-5">
+                <input autoFocus className="flex-1 border-2 border-gray-200 focus:border-yellow-500 rounded-xl p-3.5 text-lg font-semibold text-black outline-none transition-colors" placeholder={t("Item Name")} value={input.itemName} onChange={e => setInput({...input, itemName: e.target.value})} />
                 <VoiceInput onResult={(txt) => setInput(prev => ({...prev, itemName: txt}))} isDark={false} />
             </div>
             <div className="flex gap-3">
-               <button onClick={() => setIsNewPageOpen(false)} className="flex-1 py-3 bg-gray-200 rounded font-bold text-black">{t("Cancel")}</button>
-               <button onClick={handleAddPage} className="flex-1 py-3 bg-yellow-500 text-black rounded font-bold">{t("Add")}</button>
+               <button onClick={() => setIsNewPageOpen(false)} className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 transition-colors">{t("Cancel")}</button>
+               <button onClick={handleAddPage} className="flex-1 py-3.5 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white rounded-xl font-bold shadow-lg shadow-yellow-500/30 transition-all">{t("Add")}</button>
             </div>
           </div>
         </div>
