@@ -14,16 +14,7 @@ import {
   Pin, PinOff, PenTool, Highlighter, Circle as CircleIcon, Eraser, Type,
   RefreshCw, RotateCcw, Printer, FilePlus, Send,
   Bold, Italic, Underline, Clock, Package,
-  PackageX, TrendingDown, Tag, Vibrate, Activity,
-  // 🚀 FUTURISTIC FEATURES ICONS
-  CloudUpload, Users, UserPlus, 
-  Wallet, Receipt, PieChart, BarChart3, Target, Award, Crown,
-  Fingerprint, Eye, EyeOff, Smartphone, Globe, Database, HardDrive,
-  Rocket, Sparkles, Brain, Cpu, Timer, Archive,
-  MapPin, Truck, Building2, Star,
-  Moon, Sun, Palette, Volume2, VolumeX, Battery, Signal,
-  Cloud, CloudOff, Key,
-  TrendingUp, Gauge, Flame, Heart
+  PackageX, TrendingDown, Tag, Vibrate, Activity
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -1272,10 +1263,10 @@ const SalesPredictionWidget = ({ data, t, isDark }) => {
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
-                    <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
-                        <p className="text-2xl font-black text-indigo-600">{prediction.daily}</p>
-                        <p className="text-[10px] text-gray-500 font-bold">TODAY</p>
-                    </div>
+                  <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
+                    <p className="text-2xl font-black text-indigo-600">{prediction.today}</p>
+                    <p className="text-[10px] text-gray-500 font-bold">TODAY</p>
+                  </div>
                     <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
                         <p className="text-2xl font-black text-purple-600">{prediction.weekly}</p>
                         <p className="text-[10px] text-gray-500 font-bold">WEEK</p>
@@ -1774,8 +1765,8 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                               </td>
                               <td className="py-1.5 text-center">{item.qty} {item.unit}</td>
                               <td className="py-1.5 text-right">₹{item.rate}</td>
-                              {invSettings.showGst && <td className="py-1.5 text-right text-indigo-600">{item.gst}%</td>}
-                              <td className="py-1.5 text-right font-bold pr-1">₹{item.total.toFixed(0)}</td>
+                              {invSettings.showGst && <td className="py-1.5 text-right">{item.gst}%</td>}
+                              <td className="py-1.5 text-right pr-1">₹{Number(item.total || 0).toFixed(2)}</td>
                             </tr>
                           ))}
                           {invItems.length === 0 && (
@@ -4555,9 +4546,9 @@ function DukanRegister() {
                
                <div className="grid grid-cols-4 gap-2">
                  {[
-                   { icon: Package, label: t('Stock'), action: () => setView('inventory'), color: 'from-emerald-400 to-green-500' },
-                   { icon: Receipt, label: t('Bills'), action: () => setView('bills'), color: 'from-blue-400 to-cyan-500' },
-                   { icon: BarChart3, label: t('Report'), action: () => showToast(t('Coming Soon!')), color: 'from-purple-400 to-pink-500' },
+                   { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
+                   { icon: FileText, label: t('Bills'), action: () => setView('bills'), color: 'from-blue-400 to-cyan-500' },
+                   { icon: Activity, label: t('Report'), action: () => showToast(t('Coming Soon!')), color: 'from-purple-400 to-pink-500' },
                    { icon: Download, label: t('Backup'), action: () => {
                      const exportData = JSON.stringify(data, null, 2);
                      const blob = new Blob([exportData], { type: 'application/json' });
@@ -4760,9 +4751,9 @@ function DukanRegister() {
            <div className="flex items-center gap-2 mb-3">
              <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 shadow-lg shadow-purple-500/30">
-               <Rocket size={14} className="text-white animate-pulse" />
+               <Zap size={14} className="text-white animate-pulse" />
                <span className="text-xs font-bold text-white uppercase tracking-wider">{t("Futuristic Features")}</span>
-               <Sparkles size={14} className="text-yellow-300" />
+               <CheckCircle size={14} className="text-yellow-300" />
              </div>
              <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
            </div>
@@ -4773,24 +4764,24 @@ function DukanRegister() {
              <div className="relative">
                <div className="flex items-center gap-2 mb-3">
                  <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
-                   <Brain size={18} className="text-white" />
+                   <Activity size={18} className="text-white" />
                  </div>
                  <div>
                    <h3 className="font-bold text-sm">{t("Business Intelligence Hub")}</h3>
                    <p className="text-[10px] opacity-60">{t("Smart analytics for growth")}</p>
                  </div>
                  <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500">
-                   <Crown size={10} className="text-white" />
+                   <ShieldCheck size={10} className="text-white" />
                    <span className="text-[9px] font-bold text-white">PRO</span>
                  </div>
                </div>
                
                <div className="grid grid-cols-2 gap-2">
                  {[
-                   { id: 'salesForecast', icon: TrendingUp, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
-                   { id: 'profitAnalytics', icon: PieChart, label: t('Profit Analytics'), desc: t('Real-time margins'), color: 'from-blue-400 to-cyan-500' },
-                   { id: 'customerInsights', icon: Users, label: t('Customer Insights'), desc: t('Buying patterns'), color: 'from-purple-400 to-pink-500' },
-                   { id: 'inventoryHealth', icon: Gauge, label: t('Inventory Health'), desc: t('Stock optimization'), color: 'from-orange-400 to-red-500' }
+                   { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
+                   { id: 'profitAnalytics', icon: Percent, label: t('Profit Analytics'), desc: t('Real-time margins'), color: 'from-blue-400 to-cyan-500' },
+                   { id: 'customerInsights', icon: User, label: t('Customer Insights'), desc: t('Buying patterns'), color: 'from-purple-400 to-pink-500' },
+                   { id: 'inventoryHealth', icon: Package, label: t('Inventory Health'), desc: t('Stock optimization'), color: 'from-orange-400 to-red-500' }
                  ].map(feature => {
                    const isEnabled = data.settings?.biFeatures?.[feature.id];
                    return (
@@ -4833,7 +4824,7 @@ function DukanRegister() {
                {/* Biometric Lock */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <Fingerprint size={20} className="text-red-500" />
+                   <Lock size={20} className="text-red-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("Biometric Lock")}</p>
                      <p className="text-[10px] opacity-50">{t("Face ID / Fingerprint")}</p>
@@ -4850,7 +4841,7 @@ function DukanRegister() {
                {/* Auto Lock Timer */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <Timer size={20} className="text-orange-500" />
+                   <Clock size={20} className="text-orange-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("Auto Lock")}</p>
                      <p className="text-[10px] opacity-50">{t("Lock after inactivity")}</p>
@@ -4872,7 +4863,7 @@ function DukanRegister() {
                {/* Data Encryption */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <Key size={20} className="text-yellow-500" />
+                   <Lock size={20} className="text-yellow-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("Data Encryption")}</p>
                      <p className="text-[10px] opacity-50">{t("AES-256 encryption")}</p>
@@ -4890,14 +4881,14 @@ function DukanRegister() {
            <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-cyan-900/30 border-cyan-500/30' : 'bg-gradient-to-br from-cyan-50 to-blue-50 border-cyan-200'}`}>
              <div className="flex items-center gap-2 mb-3">
                <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl shadow-lg">
-                 <Cloud size={18} className="text-white" />
+                 <Download size={18} className="text-white" />
                </div>
                <div>
                  <h3 className="font-bold text-sm">{t("Cloud & Backup")}</h3>
                  <p className="text-[10px] opacity-60">{t("Never lose your data")}</p>
                </div>
                <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500">
-                 <CloudUpload size={10} className="text-white" />
+                 <CheckCircle size={10} className="text-white" />
                  <span className="text-[9px] font-bold text-white">Synced</span>
                </div>
              </div>
@@ -4906,7 +4897,7 @@ function DukanRegister() {
                {/* Auto Backup */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <HardDrive size={20} className="text-cyan-500" />
+                   <SaveAll size={20} className="text-cyan-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("Auto Backup")}</p>
                      <p className="text-[10px] opacity-50">{t("Schedule automatic backups")}</p>
@@ -4973,7 +4964,7 @@ function DukanRegister() {
              <div className="space-y-2">
                {[
                  { id: 'lowStockAlert', icon: Package, label: t('Low Stock Alerts'), color: 'text-orange-500' },
-                 { id: 'dailySummary', icon: BarChart3, label: t('Daily Summary'), color: 'text-blue-500' },
+                 { id: 'dailySummary', icon: Activity, label: t('Daily Summary'), color: 'text-blue-500' },
                  { id: 'priceDropAlert', icon: TrendingDown, label: t('Price Drop Alerts'), color: 'text-red-500' },
                  { id: 'expiryAlert', icon: AlertTriangle, label: t('Expiry Reminders'), color: 'text-yellow-500' },
                ].map(item => (
@@ -4997,14 +4988,14 @@ function DukanRegister() {
            <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-violet-900/30 border-violet-500/30' : 'bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200'}`}>
              <div className="flex items-center gap-2 mb-3">
                <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl shadow-lg">
-                 <Users size={18} className="text-white" />
+                 <User size={18} className="text-white" />
                </div>
                <div>
                  <h3 className="font-bold text-sm">{t("Multi-User Access")}</h3>
                  <p className="text-[10px] opacity-60">{t("Staff management")}</p>
                </div>
                <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-purple-500">
-                 <Star size={10} className="text-yellow-300" />
+                 <CheckCircle size={10} className="text-yellow-300" />
                  <span className="text-[9px] font-bold text-white">TEAM</span>
                </div>
              </div>
@@ -5017,7 +5008,7 @@ function DukanRegister() {
                      onClick={() => showToast(t("Coming Soon!"))}
                      className="px-2 py-1 rounded-lg text-xs font-bold bg-violet-100 text-violet-600 flex items-center gap-1"
                    >
-                     <UserPlus size={12}/> Add
+                     <Plus size={12}/> Add
                    </button>
                  </div>
                  <div className="flex -space-x-2">
@@ -5035,7 +5026,7 @@ function DukanRegister() {
                {/* Role Permissions */}
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-600/50' : 'bg-violet-100/50'} text-[10px]`}>
                  <div className="flex items-center justify-between mb-1">
-                   <span className="flex items-center gap-1"><Crown size={10} className="text-yellow-500"/> {t("Admin")}</span>
+                   <span className="flex items-center gap-1"><ShieldCheck size={10} className="text-yellow-500"/> {t("Admin")}</span>
                    <span className="opacity-60">{t("Full Access")}</span>
                  </div>
                  <div className="flex items-center justify-between">
@@ -5050,7 +5041,7 @@ function DukanRegister() {
            <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-pink-900/30 border-pink-500/30' : 'bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200'}`}>
              <div className="flex items-center gap-2 mb-3">
                <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl shadow-lg">
-                 <Palette size={18} className="text-white" />
+                 <PenTool size={18} className="text-white" />
                </div>
                <div>
                  <h3 className="font-bold text-sm">{t("Appearance & Accessibility")}</h3>
@@ -5086,7 +5077,7 @@ function DukanRegister() {
                {/* Sound Effects */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   {data.settings?.soundEffects !== false ? <Volume2 size={18} className="text-blue-500" /> : <VolumeX size={18} className="text-gray-400" />}
+                   {data.settings?.soundEffects !== false ? <Vibrate size={18} className="text-blue-500" /> : <Ban size={18} className="text-gray-400" />}
                    <p className="text-sm font-semibold">{t("Sound Effects")}</p>
                  </div>
                  <button 
@@ -5100,7 +5091,7 @@ function DukanRegister() {
                {/* High Contrast */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <Eye size={18} className="text-purple-500" />
+                   <AlertCircle size={18} className="text-purple-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("High Contrast")}</p>
                      <p className="text-[10px] opacity-50">{t("Better visibility")}</p>
@@ -5120,7 +5111,7 @@ function DukanRegister() {
            <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-teal-900/30 border-teal-500/30' : 'bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200'}`}>
              <div className="flex items-center gap-2 mb-3">
                <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-xl shadow-lg">
-                 <MapPin size={18} className="text-white" />
+                 <Pin size={18} className="text-white" />
                </div>
                <div>
                  <h3 className="font-bold text-sm">{t("Business Location")}</h3>
@@ -5176,9 +5167,9 @@ function DukanRegister() {
              
              <div className="space-y-2">
                {[
-                 { id: 'batterySaver', icon: Battery, label: t('Battery Saver'), desc: t('Reduce animations'), color: 'text-green-500' },
-                 { id: 'lowDataMode', icon: Signal, label: t('Low Data Mode'), desc: t('Compress images'), color: 'text-blue-500' },
-                 { id: 'offlineFirst', icon: CloudOff, label: t('Offline First'), desc: t('Work without internet'), color: 'text-purple-500' },
+                 { id: 'batterySaver', icon: Vibrate, label: t('Battery Saver'), desc: t('Reduce animations'), color: 'text-green-500' },
+                 { id: 'lowDataMode', icon: Wifi, label: t('Low Data Mode'), desc: t('Compress images'), color: 'text-blue-500' },
+                 { id: 'offlineFirst', icon: WifiOff, label: t('Offline First'), desc: t('Work without internet'), color: 'text-purple-500' },
                ].map(item => (
                  <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                    <div className="flex items-center gap-3">
@@ -5205,7 +5196,7 @@ function DukanRegister() {
              <div className="relative">
                <div className="flex items-center gap-2 mb-3">
                  <div className="p-2 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-xl shadow-lg">
-                   <Award size={18} className="text-white" />
+                   <ShieldCheck size={18} className="text-white" />
                  </div>
                  <div>
                    <h3 className="font-bold text-sm">{t("Business Achievements")}</h3>
@@ -5229,9 +5220,9 @@ function DukanRegister() {
                
                <div className={`mt-3 p-2 rounded-xl ${isDark ? 'bg-gradient-to-r from-yellow-900/50 to-amber-900/50' : 'bg-gradient-to-r from-yellow-100 to-amber-100'}`}>
                  <div className="flex items-center justify-between text-xs">
-                   <span className="flex items-center gap-1"><Flame size={12} className="text-orange-500"/> {t("Business Level")}</span>
+                   <span className="flex items-center gap-1"><Activity size={12} className="text-orange-500"/> {t("Business Level")}</span>
                    <span className="font-bold flex items-center gap-1">
-                     <Star size={12} className="text-yellow-500"/>
+                     <CheckCircle size={12} className="text-yellow-500"/>
                      {(data.entries?.length || 0) > 100 ? 'Gold' : (data.entries?.length || 0) > 50 ? 'Silver' : 'Bronze'}
                    </span>
                  </div>
@@ -5349,7 +5340,7 @@ function DukanRegister() {
              <div className="flex items-center justify-between mb-3">
                <div className="flex items-center gap-2">
                  <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                   <Rocket size={20} className="text-white" />
+                   <Zap size={20} className="text-white" />
                  </div>
                  <div>
                    <p className="font-bold text-sm">{data.settings?.shopName || 'AutoGear'}</p>
@@ -5357,14 +5348,14 @@ function DukanRegister() {
                  </div>
                </div>
                <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow">
-                 <Crown size={12} className="text-white" />
+                 <ShieldCheck size={12} className="text-white" />
                  <span className="text-[10px] font-bold text-white">PRO</span>
                </div>
              </div>
              
              <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                 <Brain size={16} className="mx-auto text-purple-500 mb-1"/>
+                 <Activity size={16} className="mx-auto text-purple-500 mb-1"/>
                  <span className="font-semibold">{t("AI Powered")}</span>
                </div>
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
@@ -5372,7 +5363,7 @@ function DukanRegister() {
                  <span className="font-semibold">{t("Secure")}</span>
                </div>
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                 <Cloud size={16} className="mx-auto text-blue-500 mb-1"/>
+                 <Download size={16} className="mx-auto text-blue-500 mb-1"/>
                  <span className="font-semibold">{t("Cloud Sync")}</span>
                </div>
              </div>
@@ -5383,7 +5374,7 @@ function DukanRegister() {
              <p className="text-[9px] uppercase tracking-widest mb-2">{t("Developed & Powered By")}</p>
              <div className={`inline-flex items-center gap-2 px-5 py-2 rounded-full shadow-md ${isDark ? 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500' : 'bg-gradient-to-r from-slate-100 to-white border border-slate-200'}`}>
                <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                 <Sparkles size={12} className="text-white" />
+                 <Zap size={12} className="text-white" />
                </div>
                <p className="font-bold text-sm">AutomationX</p>
                <CheckCircle size={16} className="text-blue-500" />
