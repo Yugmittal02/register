@@ -16,14 +16,14 @@ import {
   Bold, Italic, Underline, Clock, Package,
   PackageX, TrendingDown, Tag, Vibrate, Activity,
   // 🚀 FUTURISTIC FEATURES ICONS
-  Scan, CloudUpload, FileSpreadsheet, Users, UserPlus, 
+  CloudUpload, Users, UserPlus, 
   Wallet, Receipt, PieChart, BarChart3, Target, Award, Crown,
   Fingerprint, Eye, EyeOff, Smartphone, Globe, Database, HardDrive,
-  Rocket, Sparkles, Brain, Cpu, Timer, Repeat, Archive,
-  MapPin, Truck, Building2, BadgeCheck, Gem, Star,
+  Rocket, Sparkles, Brain, Cpu, Timer, Archive,
+  MapPin, Truck, Building2, Star,
   Moon, Sun, Palette, Volume2, VolumeX, Battery, Signal,
-  Cloud, CloudOff, Key, Unlock,
-  TrendingUp, LineChart, ArrowUpRight, Gauge, Flame, Leaf, Heart
+  Cloud, CloudOff, Key,
+  TrendingUp, Gauge, Flame, Heart
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -4927,7 +4927,7 @@ function DukanRegister() {
                {/* Export Data */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   <FileSpreadsheet size={20} className="text-green-500" />
+                   <FileText size={20} className="text-green-500" />
                    <div>
                      <p className="text-sm font-semibold">{t("Export Reports")}</p>
                      <p className="text-[10px] opacity-50">{t("Excel / PDF / CSV")}</p>
@@ -5386,7 +5386,7 @@ function DukanRegister() {
                  <Sparkles size={12} className="text-white" />
                </div>
                <p className="font-bold text-sm">AutomationX</p>
-               <BadgeCheck size={16} className="text-blue-500" />
+               <CheckCircle size={16} className="text-blue-500" />
              </div>
              <p className="text-[8px] mt-2 opacity-50">© 2024 All Rights Reserved</p>
            </div>
