@@ -16,13 +16,13 @@ import {
   Bold, Italic, Underline, Clock, Package,
   PackageX, TrendingDown, Tag, Vibrate, Activity,
   // 🚀 FUTURISTIC FEATURES ICONS
-  Scan, QrCode, CloudUpload, FileSpreadsheet, Users, UserPlus, 
+  Scan, CloudUpload, FileSpreadsheet, Users, UserPlus, 
   Wallet, Receipt, PieChart, BarChart3, Target, Award, Crown,
   Fingerprint, Eye, EyeOff, Smartphone, Globe, Database, HardDrive,
-  Rocket, Sparkles, Brain, Bot, Cpu, Timer, Repeat, Archive,
-  MapPin, Navigation, Truck, Building2, BadgeCheck, Gem, Star,
-  Moon, Sun, Palette, Volume2, VolumeX, Battery, Signal, Radio,
-  Link, Unlink, Cloud, CloudOff, Webhook, Key, Unlock,
+  Rocket, Sparkles, Brain, Cpu, Timer, Repeat, Archive,
+  MapPin, Truck, Building2, BadgeCheck, Gem, Star,
+  Moon, Sun, Palette, Volume2, VolumeX, Battery, Signal,
+  Cloud, CloudOff, Key, Unlock,
   TrendingUp, LineChart, ArrowUpRight, Gauge, Flame, Leaf, Heart
 } from 'lucide-react';
 
