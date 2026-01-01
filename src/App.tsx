@@ -1686,6 +1686,9 @@ function DukanRegister() {
   
   // 🖼️ IMAGE STATE
   const [viewImage, setViewImage] = useState(null);
+  
+  // 📡 SYNC INDICATOR STATE
+  const [hasPendingWrites, setHasPendingWrites] = useState(false);
 
   const [confirmConfig, setConfirmConfig] = useState({
       isOpen: false,
@@ -1715,6 +1718,19 @@ function DukanRegister() {
       setDisplayLimit(50);
       window.scrollTo(0,0);
   }, [view, activePageId, indexSearchTerm, stockSearchTerm, pageSearchTerm]);
+
+  // Check for pending writes (for sync indicator)
+  useEffect(() => {
+    const checkPending = () => {
+      try {
+        const raw = localStorage.getItem('dukan:pendingWrites');
+        setHasPendingWrites(!!raw && JSON.parse(raw).length > 0);
+      } catch { setHasPendingWrites(false); }
+    };
+    checkPending();
+    const interval = setInterval(checkPending, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const triggerConfirm = (title, message, isDanger, action) => {
       setConfirmConfig({
@@ -3060,21 +3076,6 @@ function DukanRegister() {
     </div>
     );
   };
-
-  // Check for pending writes (for sync indicator)
-  const [hasPendingWrites, setHasPendingWrites] = useState(false);
-  
-  useEffect(() => {
-    const checkPending = () => {
-      try {
-        const raw = localStorage.getItem('dukan:pendingWrites');
-        setHasPendingWrites(!!raw && JSON.parse(raw).length > 0);
-      } catch { setHasPendingWrites(false); }
-    };
-    checkPending();
-    const interval = setInterval(checkPending, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950' : 'bg-white'} ${!isOnline ? 'pt-10' : ''}`}>
