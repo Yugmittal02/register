@@ -501,8 +501,42 @@ const translateWithAPI = async (text: string, from: string = 'en', to: string = 
   }
 };
 
+// 🔠 GOOGLE TRANSLITERATION (Hinglish Typing)
+// यह English sound को हिंदी में लिखता है (जैसे: "Cat" -> "कैट", "School" -> "स्कूल")
+const transliterateWithGoogle = async (text: string): Promise<string> => {
+  if (!text || text.trim() === '') return '';
+  
+  const cacheKey = `translit:${text}`;
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+  
+  try {
+    // Google Input Tools API (Official endpoint used by Chrome extensions)
+    const url = `https://inputtools.google.com/request?text=${encodeURIComponent(text)}&itc=hi-t-i0-und&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data && data[0] === 'SUCCESS') {
+      // Result structure usually: [SUCCESS, [[input, [option1, option2], ...]]]
+      // We map over each word result and join them
+      let result = "";
+      data[1].forEach((wordData: any) => {
+        result += wordData[1][0] + " "; // Pick the first (best) suggestion
+      });
+      const finalResult = result.trim();
+      translationCache.set(cacheKey, finalResult);
+      return finalResult;
+    }
+    return text; // Fail hone par original text return kare
+  } catch (error) {
+    console.error("Transliteration Error:", error);
+    return convertToHindiFallback(text); // Offline fallback use kare
+  }
+};
+
 // Fallback dictionary for offline/quick translations
 const exactDictionary: Record<string, string> = {
+  // Auto Parts
   "brake": "ब्रेक", "pads": "पैड्स", "shoe": "शू", "oil": "तेल", "filter": "फिल्टर",
   "light": "लाइट", "headlight": "हेडलाइट", "bumper": "बम्पर", "cover": "कवर",
   "seat": "सीट", "mat": "मैट", "guard": "गार्ड", "horn": "हॉर्न", "mirror": "शीशा",
@@ -511,9 +545,25 @@ const exactDictionary: Record<string, string> = {
   "handle": "हैंडल", "lock": "लॉक", "key": "चाबी", "sensor": "सेंसर", "screen": "स्क्रीन",
   "kit": "किट", "rod": "रॉड", "bush": "बुश", "arm": "आर्म", "wiper": "वाइपर", 
   "motor": "मोटर", "pump": "पम्प", "coolant": "कूलेंट", "chain": "चैन", "belt": "बेल्ट",
+  // Car Names
   "swift": "स्विफ्ट", "thar": "थार", "creta": "क्रेटा", "alto": "आल्टो", "scorpio": "स्कॉर्पियो",
   "bolero": "बोलेरो", "city": "सिटी", "verna": "वर्ना", "wagonr": "वैगन-आर", "baleno": "बलेनो",
   "dzire": "डिजायर", "innova": "इनोवा", "fortuner": "फॉर्च्यूनर", "brezza": "ब्रेजा",
+  // Common English Words (Transliteration)
+  "cat": "कैट", "bat": "बैट", "rat": "रैट", "hat": "हैट",
+  "school": "स्कूल", "doctor": "डॉक्टर", "hospital": "हॉस्पिटल", "police": "पुलिस",
+  "engine": "इंजन", "station": "स्टेशन", "mobile": "मोबाइल", "phone": "फोन",
+  "computer": "कंप्यूटर", "internet": "इंटरनेट", "office": "ऑफिस", "market": "मार्केट",
+  "shop": "शॉप", "store": "स्टोर", "mall": "मॉल", "bank": "बैंक",
+  "bus": "बस", "train": "ट्रेन", "plane": "प्लेन", "bike": "बाइक",
+  "hello": "हेलो", "good": "गुड", "morning": "मॉर्निंग", "night": "नाइट", "thank": "थैंक", "you": "यू",
+  "yes": "यस", "no": "नो", "please": "प्लीज", "sorry": "सॉरी", "welcome": "वेलकम",
+  "name": "नेम", "time": "टाइम", "date": "डेट", "day": "डे", "week": "वीक", "month": "मंथ", "year": "ईयर",
+  "water": "वॉटर", "food": "फूड", "tea": "टी", "coffee": "कॉफी", "milk": "मिल्क",
+  "red": "रेड", "blue": "ब्लू", "green": "ग्रीन", "white": "व्हाइट", "black": "ब्लैक",
+  "one": "वन", "two": "टू", "three": "थ्री", "four": "फोर", "five": "फाइव",
+  "price": "प्राइस", "rate": "रेट", "cost": "कॉस्ट", "bill": "बिल", "payment": "पेमेंट",
+  "stock": "स्टॉक", "item": "आइटम", "product": "प्रोडक्ट", "order": "ऑर्डर", "delivery": "डिलीवरी",
   "page": "पेज", "qty": "मात्रा", "car": "गाड़ी", "search": "खोजें", 
   "index": "विषय सूची", "settings": "सेटिंग्स", "pages": "पेज लिस्ट", 
   "total": "कुल", "delete": "हटाएं", "confirm": "पुष्टि करें", "update": "अपडेट",
@@ -701,9 +751,9 @@ const useShakeSensor = (onShake, enabled = true) => {
         let shakeCount = 0;
         let lastTime = Date.now();
         let lastX = 0, lastY = 0, lastZ = 0;
-        const SHAKE_THRESHOLD = 15; // Sensitivity
-        const SHAKE_TIMEOUT = 1000; // Reset count if not shaken again within 1 sec
-        const REQUIRED_SHAKES = 2; // Need 2 shakes to trigger
+        const SHAKE_THRESHOLD = 20; // Higher sensitivity to avoid accidental triggers
+        const SHAKE_TIMEOUT = 3000; // Reset count if not shaken again within 3 sec (more time to complete shakes)
+        const REQUIRED_SHAKES = 7; // Need 7 shakes to trigger (prevents accidental activation)
 
         const handleMotion = (e) => {
             const { x, y, z } = e.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
@@ -760,21 +810,149 @@ const useShakeSensor = (onShake, enabled = true) => {
 };
 
 // ---------------------------------------------------------
-// 👻 GHOST MIC COMPONENT (Hands-Free Voice Search)
+// 🤖 AI ASSISTANT API (Gemini-like responses)
+// ---------------------------------------------------------
+const askAIAssistant = async (question: string, language: string = 'en'): Promise<string> => {
+    // Detect language from question for response
+    const isHindiQuestion = /[\u0900-\u097F]/.test(question) || 
+                           /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho)\b/i.test(question);
+    const responseLanguage = isHindiQuestion ? 'hi' : language;
+    
+    try {
+        // Using free AI API for general questions
+        const systemPrompt = responseLanguage === 'hi' 
+            ? 'You are a helpful AI assistant. Answer in Hindi (Hinglish is fine). Keep answers short and helpful. If asked about stock/inventory, guide to search in the app.'
+            : 'You are a helpful AI assistant. Keep answers short, clear and helpful. If asked about stock/inventory, guide to search in the app.';
+        
+        // Try Groq API (free tier available)
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer gsk_placeholder' // Replace with actual key in production
+            },
+            body: JSON.stringify({
+                model: 'mixtral-8x7b-32768',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: question }
+                ],
+                max_tokens: 150,
+                temperature: 0.7
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || '';
+        }
+        
+        // Fallback to local smart responses
+        return getSmartLocalResponse(question, responseLanguage);
+    } catch (error) {
+        console.warn('AI API failed, using local response:', error);
+        return getSmartLocalResponse(question, responseLanguage);
+    }
+};
+
+// Smart local response generator (works offline)
+const getSmartLocalResponse = (question: string, lang: string): string => {
+    const q = question.toLowerCase();
+    const isHindi = lang === 'hi';
+    
+    // Greetings
+    if (/\b(hello|hi|hey|namaste|namaskar)\b/i.test(q)) {
+        return isHindi ? 'नमस्ते! मैं आपकी क्या मदद कर सकता हूं?' : 'Hello! How can I help you today?';
+    }
+    
+    // Time
+    if (/\b(time|samay|kya baja|kitne baje)\b/i.test(q)) {
+        const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        return isHindi ? `अभी ${time} बज रहे हैं।` : `The current time is ${time}.`;
+    }
+    
+    // Date
+    if (/\b(date|tarikh|aaj|today)\b/i.test(q)) {
+        const date = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        return isHindi ? `आज की तारीख ${date} है।` : `Today's date is ${date}.`;
+    }
+    
+    // Weather (basic)
+    if (/\b(weather|mausam|garmi|sardi|barish)\b/i.test(q)) {
+        return isHindi ? 'मौसम की जानकारी के लिए अपने फोन का वेदर ऐप देखें।' : 'Please check your phone\'s weather app for current conditions.';
+    }
+    
+    // Math calculations
+    const mathMatch = q.match(/(\d+)\s*[\+\-\*\/x×÷]\s*(\d+)/);
+    if (mathMatch) {
+        try {
+            const expr = q.replace(/x|×/g, '*').replace(/÷/g, '/');
+            const numMatch = expr.match(/(\d+)\s*([\+\-\*\/])\s*(\d+)/);
+            if (numMatch) {
+                const [, a, op, b] = numMatch;
+                let result = 0;
+                switch(op) {
+                    case '+': result = parseInt(a) + parseInt(b); break;
+                    case '-': result = parseInt(a) - parseInt(b); break;
+                    case '*': result = parseInt(a) * parseInt(b); break;
+                    case '/': result = parseInt(a) / parseInt(b); break;
+                }
+                return isHindi ? `जवाब है ${result}` : `The answer is ${result}`;
+            }
+        } catch(e) { /* ignore */ }
+    }
+    
+    // Stock/Inventory queries - guide to search
+    if (/\b(stock|maal|item|product|kitna|available|hai kya)\b/i.test(q)) {
+        return isHindi ? 'स्टॉक देखने के लिए ऐप में सर्च करें या नीचे रिजल्ट देखें।' : 'Please check the search results below or use the app search.';
+    }
+    
+    // Business/Shop
+    if (/\b(business|dukan|shop|sell|buy|price|rate)\b/i.test(q)) {
+        return isHindi ? 'बिज़नेस टूल्स के लिए सेटिंग्स में जाएं।' : 'For business tools, go to Settings > Business Tools.';
+    }
+    
+    // Who are you
+    if (/\b(who are you|kaun ho|tum kaun|your name|naam kya)\b/i.test(q)) {
+        return isHindi ? 'मैं Autonex AI हूं, आपका स्मार्ट बिज़नेस असिस्टेंट!' : 'I am Autonex AI, your smart business assistant!';
+    }
+    
+    // Thank you
+    if (/\b(thank|thanks|dhanyawad|shukriya)\b/i.test(q)) {
+        return isHindi ? 'आपका स्वागत है! और कुछ मदद चाहिए?' : 'You\'re welcome! Need anything else?';
+    }
+    
+    // Default response
+    return isHindi 
+        ? 'मैं इस सवाल का जवाब नहीं दे पा रहा। कृपया दूसरे शब्दों में पूछें।' 
+        : 'I couldn\'t understand that. Please try asking differently.';
+};
+
+// ---------------------------------------------------------
+// 👻 GHOST MIC COMPONENT (Hands-Free Voice Search + AI Assistant)
 // ---------------------------------------------------------
 const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
     const [status, setStatus] = useState("Listening...");
     const [resultText, setResultText] = useState("");
     const [searchResult, setSearchResult] = useState(null);
+    const [aiResponse, setAiResponse] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
+    const [mode, setMode] = useState('search'); // 'search' or 'ai'
 
-    // Text to Speech Helper
-    const speak = useCallback((text) => {
+    // Detect language from text
+    const detectLanguage = (text: string): string => {
+        const isHindi = /[\u0900-\u097F]/.test(text) || 
+                       /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho|mein|ka|ki|ke)\b/i.test(text);
+        return isHindi ? 'hi' : 'en';
+    };
+
+    // Text to Speech Helper - responds in same language
+    const speak = useCallback((text: string, lang: string = 'en') => {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Stop any ongoing speech
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-IN'; // Indian English
-            utterance.rate = 1.1;
+            utterance.lang = lang === 'hi' ? 'hi-IN' : 'en-IN';
+            utterance.rate = lang === 'hi' ? 0.9 : 1.0;
             window.speechSynthesis.speak(utterance);
         }
     }, []);
@@ -783,57 +961,76 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
         const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
         if (!SpeechRecognition) {
             setStatus("❌ Browser not supported");
-            speak("Sorry, voice search not supported on this browser.");
+            speak("Sorry, voice search not supported on this browser.", 'en');
             setTimeout(onClose, 2000);
             return;
         }
 
         const recognition = new SpeechRecognition();
-        recognition.lang = 'en-IN'; // Best for Hinglish
+        recognition.lang = 'hi-IN'; // Hindi-Indian for better Hinglish support
         recognition.continuous = false;
         recognition.interimResults = false;
 
         recognition.onstart = () => {
-            // Vibrate to tell user "I am listening"
             if (navigator.vibrate) navigator.vibrate(200);
             setStatus("🎤 Listening...");
         };
 
-        recognition.onresult = (event) => {
+        recognition.onresult = async (event) => {
             const transcript = event.results[0][0].transcript;
             setResultText(transcript);
             setStatus("🧠 Processing...");
             setIsProcessing(true);
 
-            // Vibrate for processing
             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
-            // ⚡ RUN THE ADVANCED ALGORITHM
-            setTimeout(() => {
-                const result = performSmartSearch(transcript, inventory, pages);
-                setSearchResult(result);
+            const detectedLang = detectLanguage(transcript);
 
-                if (result.match) {
-                    const topItem = result.items[0];
-                    const count = result.items.length;
-                    const msg = `Found ${topItem.car}. Quantity is ${topItem.qty}. ${count > 1 ? `Plus ${count - 1} more items.` : ''}`;
-                    
-                    setStatus(`✅ Found ${count} item${count > 1 ? 's' : ''}!`);
-                    speak(msg);
-                } else {
-                    const msg = `Sorry, no stock found for ${transcript}`;
-                    setStatus(`❌ Not Found`);
-                    speak(msg);
+            // First, try stock search
+            const stockResult = performSmartSearch(transcript, inventory, pages);
+
+            if (stockResult.match && stockResult.items.length > 0) {
+                // Stock found - show stock results
+                setMode('search');
+                setSearchResult(stockResult);
+                const topItem = stockResult.items[0];
+                const count = stockResult.items.length;
+                
+                const msg = detectedLang === 'hi'
+                    ? `${topItem.car} मिला। मात्रा ${topItem.qty} है। ${count > 1 ? `और ${count - 1} आइटम भी हैं।` : ''}`
+                    : `Found ${topItem.car}. Quantity is ${topItem.qty}. ${count > 1 ? `Plus ${count - 1} more items.` : ''}`;
+                
+                setStatus(`✅ ${count} item${count > 1 ? 's' : ''} found!`);
+                speak(msg, detectedLang);
+            } else {
+                // No stock found - use AI to answer the question
+                setMode('ai');
+                setStatus("🤖 AI Thinking...");
+                
+                try {
+                    const aiAnswer = await askAIAssistant(transcript, detectedLang);
+                    setAiResponse(aiAnswer);
+                    setStatus("🤖 AI Response");
+                    speak(aiAnswer, detectedLang);
+                } catch (e) {
+                    const fallback = detectedLang === 'hi' 
+                        ? 'माफ करें, जवाब नहीं मिला। कृपया दोबारा पूछें।'
+                        : 'Sorry, could not find an answer. Please try again.';
+                    setAiResponse(fallback);
+                    setStatus("🤖 AI Response");
+                    speak(fallback, detectedLang);
                 }
-                setIsProcessing(false);
-            }, 500);
+            }
+            
+            setIsProcessing(false);
         };
 
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
+            const lang = 'en';
             if (event.error === 'no-speech') {
                 setStatus("🔇 No speech detected");
-                speak("Did not hear anything. Please try again.");
+                speak("Did not hear anything. Please try again.", lang);
             } else {
                 setStatus(`❌ Error: ${event.error}`);
             }
@@ -841,9 +1038,7 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
         };
 
         recognition.onend = () => {
-            if (!isProcessing && !searchResult) {
-                // Recognition ended without result
-            }
+            // Recognition ended
         };
 
         try {
@@ -872,8 +1067,16 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
             {/* Pulsing Visual */}
             <div className="relative mb-8">
                 <div className={`absolute inset-0 bg-blue-500 blur-3xl ${isProcessing ? 'animate-ping' : 'animate-pulse'} opacity-40`}></div>
-                <div className={`w-28 h-28 bg-slate-800 rounded-full border-4 ${searchResult?.match ? 'border-green-500' : searchResult ? 'border-red-500' : 'border-blue-500'} flex items-center justify-center relative z-10 shadow-2xl`}>
-                    <Mic size={44} className={`${isProcessing ? 'text-yellow-400 animate-bounce' : searchResult?.match ? 'text-green-400' : 'text-blue-400'}`} />
+                <div className={`w-28 h-28 bg-slate-800 rounded-full border-4 ${
+                    mode === 'ai' && aiResponse ? 'border-purple-500' :
+                    searchResult?.match ? 'border-green-500' : 
+                    searchResult ? 'border-red-500' : 'border-blue-500'
+                } flex items-center justify-center relative z-10 shadow-2xl`}>
+                    <Mic size={44} className={`${
+                        isProcessing ? 'text-yellow-400 animate-bounce' : 
+                        mode === 'ai' && aiResponse ? 'text-purple-400' :
+                        searchResult?.match ? 'text-green-400' : 'text-blue-400'
+                    }`} />
                 </div>
             </div>
             
@@ -889,8 +1092,21 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
                 <p className="text-xs text-slate-400 mb-4">Interpreted as: <span className="text-blue-400">{searchResult.interpretedAs}</span></p>
             )}
 
-            {/* Results List */}
-            {searchResult?.match && (
+            {/* AI Response Display */}
+            {mode === 'ai' && aiResponse && (
+                <div className="w-full max-w-md bg-gradient-to-br from-purple-900/50 to-indigo-900/50 p-4 rounded-2xl border border-purple-500/50 mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                            <Zap size={14} className="text-white"/>
+                        </div>
+                        <span className="text-xs font-bold text-purple-300 uppercase">Autonex AI</span>
+                    </div>
+                    <p className="text-white text-base leading-relaxed">{aiResponse}</p>
+                </div>
+            )}
+
+            {/* Stock Results List */}
+            {mode === 'search' && searchResult?.match && (
                 <div className="w-full max-w-md max-h-60 overflow-y-auto space-y-2 mt-4">
                     {searchResult.items.slice(0, 5).map(item => (
                         <div 
@@ -1459,12 +1675,24 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
     { code: 'ar', name: 'Arabic' },
   ];
 
-  // 🌐 API TRANSLATION
+  // 🌐 API TRANSLATION / TRANSLITERATION HANDLER
   const handleTranslate = async () => {
     if (!transInput.trim()) return;
     setTransLoading(true);
+    
     try {
-      const result = await translateWithAPI(transInput, transLang.from, transLang.to);
+      let result = '';
+      
+      // अगर Target Language हिंदी है, तो हम Transliteration (कैट) करेंगे
+      // For Hindi output, use Google Transliteration for phonetic conversion
+      if (transLang.to === 'hi') {
+         // ✅ Google Transliteration for Hinglish typing (Cat -> कैट)
+         result = await transliterateWithGoogle(transInput);
+      } else {
+         // बाकी भाषाओं के लिए पुराना Translation ही ठीक है
+         result = await translateWithAPI(transInput, transLang.from, transLang.to);
+      }
+
       setTransOutput(result);
       setTransHistory(prev => [{ input: transInput, output: result, from: transLang.from, to: transLang.to }, ...prev.slice(0, 9)]);
     } catch (e) {
@@ -3144,7 +3372,7 @@ const defaultData = {
   pages: [], 
   entries: [], 
   bills: [], 
-  settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Dukan Register', pinnedTools: [] },
+  settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Autonex', pinnedTools: [] },
   appStatus: 'active'
 };
 
@@ -3217,6 +3445,7 @@ function DukanRegister() {
 
   const [settingsUnlocked, setSettingsUnlocked] = useState(false);
   const [settingsPassInput, setSettingsPassInput] = useState('');
+  const [settingsTab, setSettingsTab] = useState('profile');
   const [savePassInput, setSavePassInput] = useState(''); 
     
   const [newProductPass, setNewProductPass] = useState(''); 
@@ -3333,7 +3562,7 @@ function DukanRegister() {
         const cloudData = docSnapshot.data();
         if(!cloudData.settings) cloudData.settings = defaultData.settings;
         if(!cloudData.settings.pinnedTools) cloudData.settings.pinnedTools = []; 
-        if(!cloudData.settings.shopName) cloudData.settings.shopName = 'Dukan Register';
+        if(!cloudData.settings.shopName) cloudData.settings.shopName = 'Autonex';
         if(!cloudData.appStatus) cloudData.appStatus = 'active';
             
         if(!Array.isArray(cloudData.pages)) cloudData.pages = [];
@@ -4131,8 +4360,8 @@ function DukanRegister() {
                   </div>
                   
                   <div className="text-center">
-                    <h1 className="text-3xl font-black tracking-widest text-white mb-2">DUKAN REGISTER</h1>
-                    <p className="text-slate-400 text-sm font-medium">Smart Inventory Management</p>
+                    <h1 className="text-3xl font-black tracking-widest text-white mb-2">AUTONEX</h1>
+                    <p className="text-slate-400 text-sm font-medium">Smart Auto Parts Management</p>
                   </div>
                   
                   {/* Loading Spinner */}
@@ -4162,8 +4391,8 @@ function DukanRegister() {
                <Store size={32} className="text-white" />
              </div>
            </div>
-           <h1 className="text-2xl font-bold text-center mb-1">Welcome Back</h1>
-           <p className="text-center text-slate-400 mb-8 text-sm">Sign in to manage your Dukan</p>
+           <h1 className="text-2xl font-bold text-center mb-1">Welcome to Autonex</h1>
+           <p className="text-center text-slate-400 mb-8 text-sm">Sign in to manage your inventory</p>
            
            <form onSubmit={handleAuth} className="space-y-4">
              <div>
@@ -4224,9 +4453,9 @@ function DukanRegister() {
             </div>
             <div>
               <h1 className={`text-xl font-extrabold ${isDark ? 'text-white' : 'text-amber-900'} truncate max-w-[180px]`}>
-                {data.settings.shopName || "Dukan Register"}
+                {data.settings.shopName || "Autonex"}
               </h1>
-              <p className={`text-[10px] font-semibold ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>Smart Inventory System</p>
+              <p className={`text-[10px] font-semibold ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>Smart Auto Parts Management</p>
             </div>
           </div>
           <div className="flex gap-2 items-center">
@@ -4527,440 +4756,447 @@ function DukanRegister() {
         )
     }
 
+    const settingsTabs = [
+      { id: 'profile', icon: Store, label: t('Profile'), color: 'from-purple-500 to-indigo-500' },
+      { id: 'ai', icon: Activity, label: t('AI'), color: 'from-blue-500 to-cyan-500' },
+      { id: 'appearance', icon: PenTool, label: t('Theme'), color: 'from-pink-500 to-rose-500' },
+      { id: 'notifications', icon: Bell, label: t('Alerts'), color: 'from-green-500 to-emerald-500' },
+      { id: 'security', icon: Shield, label: t('Security'), color: 'from-red-500 to-orange-500' },
+      { id: 'backup', icon: Download, label: t('Backup'), color: 'from-cyan-500 to-blue-500' },
+      { id: 'help', icon: HelpCircle, label: t('Help'), color: 'from-gray-500 to-slate-500' },
+    ];
+
+    const themeOptions = [
+      { id: 'light', name: t('Light'), colors: ['#ffffff', '#f1f5f9', '#3b82f6'], icon: '☀️' },
+      { id: 'dark', name: t('Dark'), colors: ['#0f172a', '#1e293b', '#3b82f6'], icon: '🌙' },
+      { id: 'blue', name: t('Ocean Blue'), colors: ['#1e3a5f', '#2563eb', '#60a5fa'], icon: '🌊' },
+      { id: 'green', name: t('Forest'), colors: ['#14532d', '#22c55e', '#86efac'], icon: '🌲' },
+      { id: 'purple', name: t('Royal'), colors: ['#4c1d95', '#8b5cf6', '#c4b5fd'], icon: '👑' },
+      { id: 'orange', name: t('Sunset'), colors: ['#7c2d12', '#f97316', '#fed7aa'], icon: '🌅' },
+      { id: 'rose', name: t('Rose'), colors: ['#4c0519', '#f43f5e', '#fda4af'], icon: '🌹' },
+      { id: 'auto', name: t('Auto'), colors: ['#1e293b', '#ffffff', '#8b5cf6'], icon: '🔄' },
+    ];
+
+    const accentColors = [
+      { id: 'blue', color: '#3b82f6', name: 'Blue' },
+      { id: 'green', color: '#22c55e', name: 'Green' },
+      { id: 'purple', color: '#8b5cf6', name: 'Purple' },
+      { id: 'orange', color: '#f97316', name: 'Orange' },
+      { id: 'pink', color: '#ec4899', name: 'Pink' },
+      { id: 'cyan', color: '#06b6d4', name: 'Cyan' },
+      { id: 'red', color: '#ef4444', name: 'Red' },
+      { id: 'yellow', color: '#eab308', name: 'Yellow' },
+    ];
+
     return (
-    <div className={`p-4 pb-24 min-h-screen ${isDark ? 'bg-slate-900 text-white' : 'bg-gray-50 text-black'}`}>
-       <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2><TranslateBtn /></div>
-       
-       {/* ⚡ QUICK ACTIONS - OWNER SHORTCUTS */}
-       <div className="mb-6">
-           <div className={`p-4 rounded-2xl border relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-blue-900/30 to-purple-900/30 border-blue-500/30' : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200'}`}>
-             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-             <div className="relative">
-               <div className="flex items-center gap-2 mb-3">
-                 <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
-                   <Zap size={16} className="text-white" />
-                 </div>
-                 <span className="font-bold text-sm">{t("Quick Actions")}</span>
-                 <span className="text-[10px] opacity-50 ml-auto">{t("Owner Shortcuts")}</span>
+    <div className={`pb-24 min-h-screen ${isDark ? 'bg-slate-900 text-white' : 'bg-gray-50 text-black'}`}>
+       {/* Header */}
+       <div className={`sticky top-0 z-40 p-4 backdrop-blur-xl ${isDark ? 'bg-slate-900/90' : 'bg-gray-50/90'}`}>
+         <div className="flex justify-between items-center mb-4">
+           <h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2>
+           <TranslateBtn />
+         </div>
+         
+         {/* Tab Navigation */}
+         <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+           {settingsTabs.map(tab => (
+             <button
+               key={tab.id}
+               onClick={() => setSettingsTab(tab.id as any)}
+               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-300 ${
+                 settingsTab === tab.id 
+                   ? `bg-gradient-to-r ${tab.color} text-white shadow-lg scale-105` 
+                   : isDark ? 'bg-slate-800 text-gray-400 hover:bg-slate-700' : 'bg-white text-gray-500 hover:bg-gray-100'
+               }`}
+             >
+               <tab.icon size={14} />
+               {tab.label}
+             </button>
+           ))}
+         </div>
+       </div>
+
+       <div className="p-4">
+       {/* 🏪 PROFILE TAB */}
+       {settingsTab === 'profile' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-2xl shadow-lg">
+                 <Store size={24} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-lg">{t("Shop Profile")}</h3>
+                 <p className="text-xs opacity-60">{t("Your business information")}</p>
+               </div>
+             </div>
+             
+             <div className="space-y-3">
+               <div>
+                 <label className="text-xs font-bold opacity-60 mb-1 block">{t("Shop Name")}</label>
+                 <input 
+                   type="text" 
+                   className={`w-full p-3 rounded-xl border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+                   value={data.settings.shopName || ''} 
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopName: e.target.value}})} 
+                   placeholder={t("Enter Shop Name")} 
+                 />
                </div>
                
-               <div className="grid grid-cols-4 gap-2">
-                 {[
-                   { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
-                   { icon: FileText, label: t('Bills'), action: () => setView('bills'), color: 'from-blue-400 to-cyan-500' },
-                   { icon: Activity, label: t('Report'), action: () => showToast(t('Coming Soon!')), color: 'from-purple-400 to-pink-500' },
-                   { icon: Download, label: t('Backup'), action: () => {
-                     const exportData = JSON.stringify(data, null, 2);
-                     const blob = new Blob([exportData], { type: 'application/json' });
-                     const url = URL.createObjectURL(blob);
-                     const a = document.createElement('a');
-                     a.href = url;
-                     a.download = `${data.settings?.shopName || 'shop'}_backup_${new Date().toISOString().split('T')[0]}.json`;
-                     a.click();
-                     showToast(t("Backup Downloaded!"));
-                   }, color: 'from-orange-400 to-red-500' },
-                 ].map((item, i) => (
-                   <button
-                     key={i}
-                     onClick={item.action}
-                     className={`p-3 rounded-xl ${isDark ? 'bg-slate-700/60 hover:bg-slate-600/80' : 'bg-white/80 hover:bg-white'} flex flex-col items-center gap-1 transition-all active:scale-95 shadow-sm`}
-                   >
-                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center shadow-md`}>
-                       <item.icon size={18} className="text-white" />
-                     </div>
-                     <span className="text-[10px] font-semibold">{item.label}</span>
-                   </button>
-                 ))}
+               <div>
+                 <label className="text-xs font-bold opacity-60 mb-1 block">{t("Shop Address")}</label>
+                 <input 
+                   type="text"
+                   placeholder={t("Shop Address")}
+                   value={data.settings?.shopAddress || ''}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopAddress: e.target.value}})}
+                   className={`w-full p-3 rounded-xl border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+                 />
+               </div>
+               
+               <div className="grid grid-cols-2 gap-2">
+                 <div>
+                   <label className="text-xs font-bold opacity-60 mb-1 block">{t("City")}</label>
+                   <input 
+                     type="text"
+                     placeholder={t("City")}
+                     value={data.settings?.shopCity || ''}
+                     onChange={e => pushToFirebase({...data, settings: {...data.settings, shopCity: e.target.value}})}
+                     className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+                   />
+                 </div>
+                 <div>
+                   <label className="text-xs font-bold opacity-60 mb-1 block">{t("PIN Code")}</label>
+                   <input 
+                     type="text"
+                     placeholder={t("PIN Code")}
+                     value={data.settings?.shopPincode || ''}
+                     onChange={e => pushToFirebase({...data, settings: {...data.settings, shopPincode: e.target.value}})}
+                     className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+                   />
+                 </div>
+               </div>
+               
+               <div>
+                 <label className="text-xs font-bold opacity-60 mb-1 block">{t("GST Number (Optional)")}</label>
+                 <input 
+                   type="text"
+                   placeholder={t("GST Number")}
+                   value={data.settings?.gstNumber || ''}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, gstNumber: e.target.value}})}
+                   className={`w-full p-3 rounded-xl border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+                 />
                </div>
              </div>
            </div>
-       </div>
 
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Business Utility")}</p>
-           <button onClick={() => setView('tools')} className={`w-full p-4 rounded-xl flex items-center justify-between gap-2 shadow-sm border ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700' : 'bg-white border-blue-100 text-blue-600 hover:bg-blue-50'} transition-all`}>
+           {/* Customer ID */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 to-orange-900/30 border-orange-500/30' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <User size={18} className="text-orange-500"/>
+               <span className="font-bold">{t("Your Customer ID")}</span>
+             </div>
+             <div className="flex gap-2 items-center">
+               <code className={`flex-1 p-2 rounded-lg font-mono text-xs break-all select-all ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
+                 {user.uid}
+               </code>
+               <button onClick={() => { navigator.clipboard.writeText(user.uid); showToast("ID Copied!"); }} className="p-2 bg-orange-500 text-white rounded-lg active:scale-95 transition-transform shadow">
+                 <Copy size={18}/>
+               </button>
+             </div>
+             <p className="text-[10px] opacity-50 mt-2">{t("Share this ID for support")}</p>
+           </div>
+
+           {/* Business Tools */}
+           <button onClick={() => setView('tools')} className={`w-full p-4 rounded-2xl flex items-center justify-between gap-2 shadow-sm border ${isDark ? 'bg-gradient-to-r from-slate-800 to-blue-900/30 border-blue-500/30' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'}`}>
             <div className="flex items-center gap-3">
-              <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Briefcase size={20} /></div>
-              <span className="font-bold">{t("Open Business Tools")}</span>
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow"><Briefcase size={20} className="text-white" /></div>
+              <div className="text-left">
+                <span className="font-bold block">{t("Business Tools")}</span>
+                <span className="text-xs opacity-60">{t("GST, Invoice, Calculator")}</span>
+              </div>
             </div>
             <ChevronRight size={20} className="opacity-50"/>
            </button>
-       </div>
 
-       {/* 🤖 AI & SMART FEATURES */}
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1 flex items-center gap-2">
-             <Zap size={12} className="text-yellow-500"/> {t("AI & Smart Features")}
-           </p>
-           
-           {/* AI Predictions Toggle */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Activity size={16} className="text-purple-500" /> {t("AI Sales Predictions")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("Predict future sales using ML algorithms")}</p>
+           {/* Business Achievements */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 to-yellow-900/30 border-yellow-500/30' : 'bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <ShieldCheck size={18} className="text-yellow-500"/>
+               <span className="font-bold">{t("Business Achievements")}</span>
+             </div>
+             <div className="grid grid-cols-3 gap-2 mb-3">
+               {[
+                 { icon: '🏪', label: t('Days'), value: '30+' },
+                 { icon: '📦', label: t('Products'), value: (data.entries?.length || 0).toString() },
+                 { icon: '📊', label: t('Bills'), value: (data.bills?.length || 0).toString() },
+               ].map((stat, i) => (
+                 <div key={i} className={`p-2 rounded-xl text-center ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
+                   <span className="text-xl">{stat.icon}</span>
+                   <p className="text-lg font-bold">{stat.value}</p>
+                   <p className="text-[9px] opacity-60">{stat.label}</p>
                  </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, aiPredictions: !data.settings?.aiPredictions}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.aiPredictions ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.aiPredictions ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
+               ))}
+             </div>
+             <div className={`p-2 rounded-xl ${isDark ? 'bg-slate-700/50' : 'bg-yellow-100/50'}`}>
+               <div className="flex items-center justify-between text-xs mb-1">
+                 <span>{t("Level")}</span>
+                 <span className="font-bold">{(data.entries?.length || 0) > 100 ? '🥇 Gold' : (data.entries?.length || 0) > 50 ? '🥈 Silver' : '🥉 Bronze'}</span>
+               </div>
+               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                 <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full" style={{ width: `${Math.min(100, ((data.entries?.length || 0) / 100) * 100)}%` }}></div>
+               </div>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* 🤖 AI TAB */}
+       {settingsTab === 'ai' && (
+         <div className="space-y-3 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border mb-4 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl shadow-lg">
+                 <Activity size={24} className="text-white" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-lg">{t("AI & Smart Features")}</h3>
+                 <p className="text-xs opacity-60">{t("Powered by Machine Learning")}</p>
+               </div>
+             </div>
+
+             <div className="space-y-2">
+               {[
+                 { id: 'aiPredictions', icon: Activity, label: t('AI Sales Predictions'), desc: t('Predict future sales'), color: 'text-purple-500', gradient: 'from-purple-500 to-indigo-500' },
+                 { id: 'smartReorder', icon: Bell, label: t('Smart Reorder Alerts'), desc: t('AI calculates reorder time'), color: 'text-green-500', gradient: 'from-green-500 to-emerald-500' },
+                 { id: 'priceOptimization', icon: DollarSign, label: t('Price Optimization'), desc: t('AI suggests pricing'), color: 'text-blue-500', gradient: 'from-blue-500 to-cyan-500' },
+                 { id: 'fuzzySearch', icon: Search, label: t('Fuzzy Search'), desc: t('Find items with typos'), color: 'text-orange-500', gradient: 'from-orange-500 to-amber-500' },
+                 { id: 'autoCategory', icon: Layers, label: t('Auto Categorization'), desc: t('AI groups products'), color: 'text-pink-500', gradient: 'from-pink-500 to-rose-500' },
+                 { id: 'voiceAI', icon: Mic, label: t('Voice AI Commands'), desc: t('Hindi/English voice control'), color: 'text-indigo-500', gradient: 'from-indigo-500 to-violet-500' },
+               ].map(item => (
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                   <div className="flex items-center gap-3">
+                     <div className={`p-2 rounded-lg bg-gradient-to-br ${item.gradient}`}>
+                       <item.icon size={16} className="text-white" />
+                     </div>
+                     <div>
+                       <p className="text-sm font-semibold">{item.label}</p>
+                       <p className="text-[10px] opacity-50">{item.desc}</p>
+                     </div>
+                   </div>
+                   <button 
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, [item.id]: !data.settings?.[item.id]}})}
+                     className={`relative w-11 h-6 rounded-full transition-all duration-300 ${data.settings?.[item.id] ? `bg-gradient-to-r ${item.gradient}` : 'bg-gray-300'}`}
+                   >
+                     <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
+                   </button>
+                 </div>
+               ))}
              </div>
            </div>
 
-           {/* Smart Reorder Alerts */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Bell size={16} className="text-green-500" /> {t("Smart Reorder Alerts")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("AI calculates when to reorder stock")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, smartReorder: !data.settings?.smartReorder}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.smartReorder ? 'bg-green-600 text-white border-green-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.smartReorder ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
+           {/* Dashboard Widgets */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-2 mb-3">
+               <Grid size={18} className="text-cyan-500"/>
+               <span className="font-bold">{t("Dashboard Widgets")}</span>
              </div>
-           </div>
-
-           {/* Price Optimization */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <DollarSign size={16} className="text-blue-500" /> {t("Price Optimization")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("AI suggests optimal pricing")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, priceOptimization: !data.settings?.priceOptimization}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.priceOptimization ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.priceOptimization ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
-             </div>
-           </div>
-
-           {/* Fuzzy Search */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Search size={16} className="text-orange-500" /> {t("Fuzzy Search")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("Find items even with typos")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, fuzzySearch: !data.settings?.fuzzySearch}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.fuzzySearch ? 'bg-orange-600 text-white border-orange-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.fuzzySearch ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
-             </div>
-           </div>
-
-           {/* Auto Categorization */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-pink-50 to-rose-50 border-pink-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Layers size={16} className="text-pink-500" /> {t("Auto Categorization")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("AI groups similar products")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, autoCategory: !data.settings?.autoCategory}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.autoCategory ? 'bg-pink-600 text-white border-pink-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.autoCategory ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
-             </div>
-           </div>
-
-           {/* Voice AI Commands */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-gradient-to-r from-indigo-50 to-violet-50 border-indigo-200'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Mic size={16} className="text-indigo-500" /> {t("Voice AI Commands")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("Control app with voice in Hindi/English")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, voiceAI: !data.settings?.voiceAI}})} 
-                   className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-2 text-xs border transition-all ${data.settings?.voiceAI ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {data.settings?.voiceAI ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
-             </div>
-           </div>
-       </div>
-
-       {/* 📊 DASHBOARD WIDGETS */}
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1 flex items-center gap-2">
-             <Grid size={12} className="text-cyan-500"/> {t("Dashboard Widgets")}
-           </p>
-           
-           <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-             <p className="text-xs text-gray-500 mb-3">{t("Select widgets to show on dashboard")}</p>
-             
              <div className="grid grid-cols-2 gap-2">
                {[
-                 { id: 'aiInsights', label: '🧠 AI Insights', desc: 'Smart suggestions' },
-                 { id: 'salesChart', label: '📈 Sales Chart', desc: 'Visual analytics' },
-                 { id: 'lowStock', label: '⚠️ Low Stock', desc: 'Alerts panel' },
-                 { id: 'topProducts', label: '🏆 Top Products', desc: 'Best sellers' },
-                 { id: 'recentActivity', label: '📋 Recent Activity', desc: 'Action log' },
-                 { id: 'predictions', label: '🔮 Predictions', desc: 'Future trends' },
+                 { id: 'aiInsights', label: '🧠 AI Insights' },
+                 { id: 'salesChart', label: '📈 Sales Chart' },
+                 { id: 'lowStock', label: '⚠️ Low Stock' },
+                 { id: 'topProducts', label: '🏆 Top Products' },
+                 { id: 'recentActivity', label: '📋 Activity' },
+                 { id: 'predictions', label: '🔮 Predictions' },
                ].map(widget => {
                  const isEnabled = data.settings?.widgets?.[widget.id] !== false;
                  return (
                    <button 
                      key={widget.id}
-                     onClick={() => pushToFirebase({
-                       ...data, 
-                       settings: {
-                         ...data.settings, 
-                         widgets: {...(data.settings?.widgets || {}), [widget.id]: !isEnabled}
-                       }
-                     })}
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, widgets: {...(data.settings?.widgets || {}), [widget.id]: !isEnabled}}})}
                      className={`p-3 rounded-xl border text-left transition-all ${isEnabled 
-                       ? (isDark ? 'bg-slate-700 border-blue-500' : 'bg-blue-50 border-blue-300') 
-                       : (isDark ? 'bg-slate-800 border-slate-600 opacity-50' : 'bg-gray-50 border-gray-200 opacity-50')
-                     }`}
+                       ? (isDark ? 'bg-blue-900/30 border-blue-500' : 'bg-blue-50 border-blue-300') 
+                       : (isDark ? 'bg-slate-700/50 border-slate-600 opacity-50' : 'bg-gray-50 border-gray-200 opacity-50')}`}
                    >
                      <span className="text-sm">{widget.label}</span>
-                     <p className="text-[10px] text-gray-500">{widget.desc}</p>
                      {isEnabled && <CheckCircle size={12} className="text-blue-500 mt-1"/>}
                    </button>
                  );
                })}
              </div>
            </div>
-       </div>
 
-       {/* 🚀 FUTURISTIC FEATURES - OWNER POWER TOOLS */}
-       <div className="mb-6">
-           <div className="flex items-center gap-2 mb-3">
-             <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
-             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 shadow-lg shadow-purple-500/30">
-               <Zap size={14} className="text-white animate-pulse" />
-               <span className="text-xs font-bold text-white uppercase tracking-wider">{t("Futuristic Features")}</span>
-               <CheckCircle size={14} className="text-yellow-300" />
-             </div>
-             <div className={`flex-1 h-px ${isDark ? 'bg-gradient-to-r from-transparent via-purple-500 to-transparent' : 'bg-gradient-to-r from-transparent via-purple-400 to-transparent'}`}></div>
-           </div>
-           
-           {/* 📊 BUSINESS INTELLIGENCE HUB */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-slate-800 to-indigo-900/50 border-indigo-500/50' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-indigo-200'}`}>
-             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-             <div className="relative">
-               <div className="flex items-center gap-2 mb-3">
-                 <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
-                   <Activity size={18} className="text-white" />
-                 </div>
-                 <div>
-                   <h3 className="font-bold text-sm">{t("Business Intelligence Hub")}</h3>
-                   <p className="text-[10px] opacity-60">{t("Smart analytics for growth")}</p>
-                 </div>
-                 <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500">
-                   <ShieldCheck size={10} className="text-white" />
-                   <span className="text-[9px] font-bold text-white">PRO</span>
-                 </div>
-               </div>
-               
-               <div className="grid grid-cols-2 gap-2">
-                 {[
-                   { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), desc: t('30-day predictions'), color: 'from-green-400 to-emerald-500' },
-                   { id: 'profitAnalytics', icon: Percent, label: t('Profit Analytics'), desc: t('Real-time margins'), color: 'from-blue-400 to-cyan-500' },
-                   { id: 'customerInsights', icon: User, label: t('Customer Insights'), desc: t('Buying patterns'), color: 'from-purple-400 to-pink-500' },
-                   { id: 'inventoryHealth', icon: Package, label: t('Inventory Health'), desc: t('Stock optimization'), color: 'from-orange-400 to-red-500' }
-                 ].map(feature => {
-                   const isEnabled = data.settings?.biFeatures?.[feature.id];
-                   return (
-                     <button
-                       key={feature.id}
-                       onClick={() => pushToFirebase({
-                         ...data,
-                         settings: {...data.settings, biFeatures: {...(data.settings?.biFeatures || {}), [feature.id]: !isEnabled}}
-                       })}
-                       className={`p-3 rounded-xl border text-left transition-all duration-300 ${isEnabled 
-                         ? 'bg-white/80 dark:bg-slate-700/80 border-indigo-300 shadow-md scale-[1.02]' 
-                         : 'bg-white/40 dark:bg-slate-800/40 border-gray-200 dark:border-slate-600 opacity-60'}`}
-                     >
-                       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${feature.color} flex items-center justify-center mb-2 shadow-sm`}>
-                         <feature.icon size={16} className="text-white" />
-                       </div>
-                       <p className="text-xs font-semibold">{feature.label}</p>
-                       <p className="text-[9px] opacity-50">{feature.desc}</p>
-                       {isEnabled && <div className="mt-1 flex items-center gap-1 text-green-500"><CheckCircle size={10}/><span className="text-[9px] font-bold">Active</span></div>}
-                     </button>
-                   );
-                 })}
-               </div>
-             </div>
-           </div>
-
-           {/* 🔐 ADVANCED SECURITY */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-red-900/30 border-red-500/30' : 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'}`}>
+           {/* Business Intelligence */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 to-indigo-900/30 border-indigo-500/30' : 'bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200'}`}>
              <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl shadow-lg">
-                 <Shield size={18} className="text-white" />
+               <Activity size={18} className="text-indigo-500"/>
+               <span className="font-bold">{t("Business Intelligence")}</span>
+               <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-[9px] font-bold text-white">PRO</span>
+             </div>
+             <div className="grid grid-cols-2 gap-2">
+               {[
+                 { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), color: 'from-green-400 to-emerald-500' },
+                 { id: 'profitAnalytics', icon: Percent, label: t('Profit Analytics'), color: 'from-blue-400 to-cyan-500' },
+                 { id: 'customerInsights', icon: User, label: t('Customer Insights'), color: 'from-purple-400 to-pink-500' },
+                 { id: 'inventoryHealth', icon: Package, label: t('Inventory Health'), color: 'from-orange-400 to-red-500' }
+               ].map(feature => {
+                 const isEnabled = data.settings?.biFeatures?.[feature.id];
+                 return (
+                   <button
+                     key={feature.id}
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, biFeatures: {...(data.settings?.biFeatures || {}), [feature.id]: !isEnabled}}})}
+                     className={`p-3 rounded-xl border text-left transition-all ${isEnabled ? (isDark ? 'bg-slate-700 border-indigo-400' : 'bg-white border-indigo-300') : 'opacity-60'}`}
+                   >
+                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${feature.color} flex items-center justify-center mb-2`}>
+                       <feature.icon size={14} className="text-white" />
+                     </div>
+                     <p className="text-xs font-semibold">{feature.label}</p>
+                     {isEnabled && <div className="flex items-center gap-1 text-green-500 mt-1"><CheckCircle size={10}/><span className="text-[9px]">Active</span></div>}
+                   </button>
+                 );
+               })}
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* 🎨 APPEARANCE TAB */}
+       {settingsTab === 'appearance' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           {/* Theme Selection */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-pink-500 to-rose-500 rounded-2xl shadow-lg">
+                 <PenTool size={24} className="text-white" />
                </div>
                <div>
-                 <h3 className="font-bold text-sm">{t("Advanced Security")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Protect your business data")}</p>
+                 <h3 className="font-bold text-lg">{t("Theme")}</h3>
+                 <p className="text-xs opacity-60">{t("Choose your style")}</p>
                </div>
              </div>
-             
-             <div className="space-y-2">
-               {/* Biometric Lock */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <Lock size={20} className="text-red-500" />
-                   <div>
-                     <p className="text-sm font-semibold">{t("Biometric Lock")}</p>
-                     <p className="text-[10px] opacity-50">{t("Face ID / Fingerprint")}</p>
-                   </div>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, biometricLock: !data.settings?.biometricLock}})}
-                   className={`relative w-12 h-6 rounded-full transition-all duration-300 ${data.settings?.biometricLock ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-300'}`}
+
+             <div className="grid grid-cols-4 gap-2 mb-4">
+               {themeOptions.map(theme => (
+                 <button
+                   key={theme.id}
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, theme: theme.id}})}
+                   className={`p-2 rounded-xl border-2 transition-all ${(data.settings?.theme || 'light') === theme.id 
+                     ? 'border-blue-500 scale-105 shadow-lg' 
+                     : isDark ? 'border-slate-600 hover:border-slate-500' : 'border-gray-200 hover:border-gray-300'}`}
                  >
-                   <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${data.settings?.biometricLock ? 'left-6' : 'left-0.5'}`}></div>
+                   <div className="flex justify-center gap-0.5 mb-1.5">
+                     {theme.colors.map((color, i) => (
+                       <div key={i} className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
+                     ))}
+                   </div>
+                   <span className="text-xl block text-center mb-1">{theme.icon}</span>
+                   <p className="text-[10px] font-semibold text-center">{theme.name}</p>
+                   {(data.settings?.theme || 'light') === theme.id && <CheckCircle size={12} className="text-blue-500 mx-auto mt-1"/>}
                  </button>
-               </div>
-               
-               {/* Auto Lock Timer */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <Clock size={20} className="text-orange-500" />
-                   <div>
-                     <p className="text-sm font-semibold">{t("Auto Lock")}</p>
-                     <p className="text-[10px] opacity-50">{t("Lock after inactivity")}</p>
-                   </div>
-                 </div>
-                 <select 
-                   value={data.settings?.autoLockTime || '5'}
-                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoLockTime: e.target.value}})}
-                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
-                 >
-                   <option value="1">1 min</option>
-                   <option value="5">5 min</option>
-                   <option value="15">15 min</option>
-                   <option value="30">30 min</option>
-                   <option value="never">Never</option>
-                 </select>
-               </div>
-               
-               {/* Data Encryption */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <Lock size={20} className="text-yellow-500" />
-                   <div>
-                     <p className="text-sm font-semibold">{t("Data Encryption")}</p>
-                     <p className="text-[10px] opacity-50">{t("AES-256 encryption")}</p>
-                   </div>
-                 </div>
-                 <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-600">
-                   <CheckCircle size={12}/>
-                   <span className="text-[10px] font-bold">Enabled</span>
-                 </div>
-               </div>
+               ))}
              </div>
            </div>
 
-           {/* ☁️ CLOUD & BACKUP */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-cyan-900/30 border-cyan-500/30' : 'bg-gradient-to-br from-cyan-50 to-blue-50 border-cyan-200'}`}>
+           {/* Accent Color */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
              <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl shadow-lg">
-                 <Download size={18} className="text-white" />
-               </div>
-               <div>
-                 <h3 className="font-bold text-sm">{t("Cloud & Backup")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Never lose your data")}</p>
-               </div>
-               <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500">
-                 <CheckCircle size={10} className="text-white" />
-                 <span className="text-[9px] font-bold text-white">Synced</span>
-               </div>
+               <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-500"></div>
+               <span className="font-bold">{t("Accent Color")}</span>
              </div>
-             
-             <div className="space-y-2">
-               {/* Auto Backup */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <SaveAll size={20} className="text-cyan-500" />
-                   <div>
-                     <p className="text-sm font-semibold">{t("Auto Backup")}</p>
-                     <p className="text-[10px] opacity-50">{t("Schedule automatic backups")}</p>
-                   </div>
-                 </div>
-                 <select 
-                   value={data.settings?.autoBackup || 'daily'}
-                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoBackup: e.target.value}})}
-                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
+             <div className="flex gap-2 flex-wrap">
+               {accentColors.map(accent => (
+                 <button
+                   key={accent.id}
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, accentColor: accent.id}})}
+                   className={`w-10 h-10 rounded-xl transition-all ${(data.settings?.accentColor || 'blue') === accent.id ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'hover:scale-105'}`}
+                   style={{ backgroundColor: accent.color }}
                  >
-                   <option value="hourly">Hourly</option>
-                   <option value="daily">Daily</option>
-                   <option value="weekly">Weekly</option>
-                   <option value="manual">Manual</option>
-                 </select>
-               </div>
-               
-               {/* Export Data */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <FileText size={20} className="text-green-500" />
-                   <div>
-                     <p className="text-sm font-semibold">{t("Export Reports")}</p>
-                     <p className="text-[10px] opacity-50">{t("Excel / PDF / CSV")}</p>
-                   </div>
-                 </div>
-                 <button 
-                   onClick={() => {
-                     const exportData = JSON.stringify(data, null, 2);
-                     const blob = new Blob([exportData], { type: 'application/json' });
-                     const url = URL.createObjectURL(blob);
-                     const a = document.createElement('a');
-                     a.href = url;
-                     a.download = `${data.settings?.shopName || 'shop'}_backup_${new Date().toISOString().split('T')[0]}.json`;
-                     a.click();
-                     showToast(t("Backup Downloaded!"));
-                   }}
-                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white flex items-center gap-1"
-                 >
-                   <Download size={12}/> Export
+                   {(data.settings?.accentColor || 'blue') === accent.id && <CheckCircle size={16} className="text-white mx-auto"/>}
                  </button>
-               </div>
-               
-               {/* Last Backup */}
-               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-600/50' : 'bg-cyan-100/50'} flex items-center justify-between`}>
-                 <span className="text-[10px] opacity-70">{t("Last Backup")}</span>
-                 <span className="text-[10px] font-bold">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
-               </div>
+               ))}
              </div>
            </div>
 
-           {/* 📱 SMART NOTIFICATIONS */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-green-900/30 border-green-500/30' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'}`}>
+           {/* Font Size */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
              <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl shadow-lg">
-                 <Bell size={18} className="text-white" />
+               <Type size={18} className="text-pink-500"/>
+               <span className="font-bold">{t("Font Size")}</span>
+             </div>
+             <div className="flex gap-2">
+               {['Small', 'Medium', 'Large'].map(size => (
+                 <button
+                   key={size}
+                   onClick={() => pushToFirebase({...data, settings: {...data.settings, fontSize: size}})}
+                   className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${(data.settings?.fontSize || 'Medium') === size
+                     ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' 
+                     : isDark ? 'bg-slate-700' : 'bg-gray-100'}`}
+                 >
+                   {t(size)}
+                 </button>
+               ))}
+             </div>
+           </div>
+
+           {/* More Options */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <p className="text-xs font-bold opacity-60 mb-3">{t("More Options")}</p>
+             <div className="space-y-2">
+               {[
+                 { id: 'soundEffects', icon: Vibrate, label: t('Sound Effects'), desc: t('Button sounds') },
+                 { id: 'highContrast', icon: AlertCircle, label: t('High Contrast'), desc: t('Better visibility') },
+                 { id: 'reducedMotion', icon: Zap, label: t('Reduced Motion'), desc: t('Less animations') },
+               ].map(item => (
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                   <div className="flex items-center gap-3">
+                     <item.icon size={18} className="text-purple-500" />
+                     <div>
+                       <p className="text-sm font-semibold">{item.label}</p>
+                       <p className="text-[10px] opacity-50">{item.desc}</p>
+                     </div>
+                   </div>
+                   <button 
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, [item.id]: item.id === 'soundEffects' ? data.settings?.soundEffects === false : !data.settings?.[item.id]}})}
+                     className={`relative w-10 h-5 rounded-full transition-all duration-300 ${(item.id === 'soundEffects' ? data.settings?.soundEffects !== false : data.settings?.[item.id]) ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-300'}`}
+                   >
+                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${(item.id === 'soundEffects' ? data.settings?.soundEffects !== false : data.settings?.[item.id]) ? 'left-5' : 'left-0.5'}`}></div>
+                   </button>
+                 </div>
+               ))}
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* 🔔 NOTIFICATIONS TAB */}
+       {settingsTab === 'notifications' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl shadow-lg">
+                 <Bell size={24} className="text-white" />
                </div>
                <div>
-                 <h3 className="font-bold text-sm">{t("Smart Notifications")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Stay informed always")}</p>
+                 <h3 className="font-bold text-lg">{t("Notifications")}</h3>
+                 <p className="text-xs opacity-60">{t("Stay informed")}</p>
                </div>
              </div>
-             
+
+             {/* Permission Status */}
+             <div className={`p-3 rounded-xl border mb-4 flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+               <div>
+                 <p className="font-bold">{t("Push Notifications")}</p>
+                 <p className="text-xs opacity-60">{notifPermission === 'granted' ? t("Enabled") : t("Allow popups & alerts")}</p>
+               </div>
+               {notifPermission === 'granted' 
+                 ? <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg font-bold text-xs flex items-center gap-1"><CheckCircle size={14}/> Active</span>
+                 : <button onClick={requestNotificationPermission} className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-bold text-xs flex items-center gap-1"><Bell size={14}/> Enable</button>
+               }
+             </div>
+
+             {/* Notification Types */}
+             <p className="text-xs font-bold opacity-60 mb-2">{t("Alert Types")}</p>
              <div className="space-y-2">
                {[
                  { id: 'lowStockAlert', icon: Package, label: t('Low Stock Alerts'), color: 'text-orange-500' },
@@ -4968,7 +5204,7 @@ function DukanRegister() {
                  { id: 'priceDropAlert', icon: TrendingDown, label: t('Price Drop Alerts'), color: 'text-red-500' },
                  { id: 'expiryAlert', icon: AlertTriangle, label: t('Expiry Reminders'), color: 'text-yellow-500' },
                ].map(item => (
-                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
                    <div className="flex items-center gap-3">
                      <item.icon size={18} className={item.color} />
                      <p className="text-sm font-semibold">{item.label}</p>
@@ -4984,194 +5220,229 @@ function DukanRegister() {
              </div>
            </div>
 
-           {/* 👥 MULTI-USER ACCESS */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-violet-900/30 border-violet-500/30' : 'bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200'}`}>
+           {/* Low Stock Limit */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
              <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-500 rounded-xl shadow-lg">
-                 <User size={18} className="text-white" />
+               <AlertTriangle size={18} className="text-red-500"/>
+               <span className="font-bold">{t("Low Stock Limit")}</span>
+             </div>
+             <div className="flex items-center gap-4 mb-3">
+               <input 
+                 type="range" min="1" max="20" 
+                 value={tempLimit} 
+                 onChange={(e) => setTempLimit(parseInt(e.target.value))} 
+                 className="flex-1 accent-red-500 h-2 bg-gray-200 rounded-lg"
+               />
+               <span className="text-2xl font-bold w-10 text-center">{tempLimit}</span>
+             </div>
+             <button 
+               onClick={() => { triggerConfirm("Update?", `Set limit to ${tempLimit}?`, false, () => pushToFirebase({...data, settings: {...data.settings, limit: tempLimit}}))}}
+               className="w-full py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl font-bold text-sm"
+             >
+               {t("Save Limit")}
+             </button>
+           </div>
+
+           {/* Shake to Search */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center justify-between">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-blue-100 rounded-xl"><Activity size={18} className="text-blue-600"/></div>
+                 <div>
+                   <p className="font-bold">{t("Shake to Search")}</p>
+                   <p className="text-xs opacity-60">{t("Shake phone for voice search")}</p>
+                 </div>
+               </div>
+               <button 
+                 onClick={() => setShakeEnabled(!shakeEnabled)} 
+                 className={`relative w-11 h-6 rounded-full transition-all duration-300 ${shakeEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'}`}
+               >
+                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${shakeEnabled ? 'left-5' : 'left-0.5'}`}></div>
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* 🔒 SECURITY TAB */}
+       {settingsTab === 'security' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl shadow-lg">
+                 <Shield size={24} className="text-white" />
                </div>
                <div>
-                 <h3 className="font-bold text-sm">{t("Multi-User Access")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Staff management")}</p>
-               </div>
-               <div className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-violet-500 to-purple-500">
-                 <CheckCircle size={10} className="text-yellow-300" />
-                 <span className="text-[9px] font-bold text-white">TEAM</span>
+                 <h3 className="font-bold text-lg">{t("Security")}</h3>
+                 <p className="text-xs opacity-60">{t("Protect your data")}</p>
                </div>
              </div>
-             
+
+             {/* Change Password */}
+             <div className={`p-3 rounded-xl border mb-3 ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+               <p className="font-bold mb-2">{t("Product Password")}</p>
+               <input 
+                 type="password" 
+                 placeholder={t("New Password")} 
+                 className={`w-full p-2 rounded-lg border mb-2 ${isDark ? 'bg-slate-600 border-slate-500' : 'bg-white border-gray-300'}`}
+                 value={newProductPass} 
+                 onChange={e => setNewProductPass(e.target.value)}
+               />
+               <button 
+                 onClick={() => { triggerConfirm("Change?", "Update password?", false, () => { pushToFirebase({...data, settings: {...data.settings, productPassword: newProductPass}}); setNewProductPass(''); showToast(t("Updated!")); })}}
+                 className="w-full py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg font-bold text-sm"
+               >
+                 {t("Update Password")}
+               </button>
+             </div>
+
+             {/* Security Features */}
              <div className="space-y-2">
-               <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center justify-between mb-2">
-                   <p className="text-sm font-semibold">{t("Staff Accounts")}</p>
+               {[
+                 { id: 'biometricLock', icon: Lock, label: t('Biometric Lock'), desc: t('Face ID / Fingerprint'), color: 'text-red-500' },
+               ].map(item => (
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                   <div className="flex items-center gap-3">
+                     <item.icon size={18} className={item.color} />
+                     <div>
+                       <p className="text-sm font-semibold">{item.label}</p>
+                       <p className="text-[10px] opacity-50">{item.desc}</p>
+                     </div>
+                   </div>
                    <button 
-                     onClick={() => showToast(t("Coming Soon!"))}
-                     className="px-2 py-1 rounded-lg text-xs font-bold bg-violet-100 text-violet-600 flex items-center gap-1"
+                     onClick={() => pushToFirebase({...data, settings: {...data.settings, [item.id]: !data.settings?.[item.id]}})}
+                     className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.[item.id] ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-300'}`}
                    >
-                     <Plus size={12}/> Add
+                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
                    </button>
                  </div>
-                 <div className="flex -space-x-2">
-                   {['👤', '👨‍💼', '👩‍💻'].map((emoji, i) => (
-                     <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 ${isDark ? 'border-slate-700 bg-slate-600' : 'border-white bg-gray-100'}`}>
-                       {emoji}
-                     </div>
-                   ))}
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${isDark ? 'border-slate-700 bg-violet-600 text-white' : 'border-white bg-violet-100 text-violet-600'}`}>
-                     +2
-                   </div>
-                 </div>
-               </div>
-               
-               {/* Role Permissions */}
-               <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-600/50' : 'bg-violet-100/50'} text-[10px]`}>
-                 <div className="flex items-center justify-between mb-1">
-                   <span className="flex items-center gap-1"><ShieldCheck size={10} className="text-yellow-500"/> {t("Admin")}</span>
-                   <span className="opacity-60">{t("Full Access")}</span>
-                 </div>
-                 <div className="flex items-center justify-between">
-                   <span className="flex items-center gap-1"><User size={10} className="text-blue-500"/> {t("Staff")}</span>
-                   <span className="opacity-60">{t("Limited Access")}</span>
-                 </div>
-               </div>
-             </div>
-           </div>
+               ))}
 
-           {/* 🎨 APPEARANCE & ACCESSIBILITY */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-pink-900/30 border-pink-500/30' : 'bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200'}`}>
-             <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-pink-500 to-rose-500 rounded-xl shadow-lg">
-                 <PenTool size={18} className="text-white" />
-               </div>
-               <div>
-                 <h3 className="font-bold text-sm">{t("Appearance & Accessibility")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Customize your experience")}</p>
-               </div>
-             </div>
-             
-             <div className="space-y-2">
-               {/* Font Size */}
-               <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center justify-between mb-2">
-                   <div className="flex items-center gap-2">
-                     <Type size={16} className="text-pink-500"/>
-                     <span className="text-sm font-semibold">{t("Font Size")}</span>
-                   </div>
-                   <span className="text-xs font-bold">{data.settings?.fontSize || 'Medium'}</span>
-                 </div>
-                 <div className="flex gap-2">
-                   {['Small', 'Medium', 'Large'].map(size => (
-                     <button
-                       key={size}
-                       onClick={() => pushToFirebase({...data, settings: {...data.settings, fontSize: size}})}
-                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${data.settings?.fontSize === size || (!data.settings?.fontSize && size === 'Medium')
-                         ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white' 
-                         : isDark ? 'bg-slate-600 text-gray-300' : 'bg-gray-100'}`}
-                     >
-                       {size}
-                     </button>
-                   ))}
-                 </div>
-               </div>
-               
-               {/* Sound Effects */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+               {/* Auto Lock Timer */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
-                   {data.settings?.soundEffects !== false ? <Vibrate size={18} className="text-blue-500" /> : <Ban size={18} className="text-gray-400" />}
-                   <p className="text-sm font-semibold">{t("Sound Effects")}</p>
-                 </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, soundEffects: data.settings?.soundEffects === false}})}
-                   className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.soundEffects !== false ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'}`}
-                 >
-                   <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.soundEffects !== false ? 'left-5' : 'left-0.5'}`}></div>
-                 </button>
-               </div>
-               
-               {/* High Contrast */}
-               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
-                 <div className="flex items-center gap-3">
-                   <AlertCircle size={18} className="text-purple-500" />
+                   <Clock size={18} className="text-orange-500" />
                    <div>
-                     <p className="text-sm font-semibold">{t("High Contrast")}</p>
-                     <p className="text-[10px] opacity-50">{t("Better visibility")}</p>
+                     <p className="text-sm font-semibold">{t("Auto Lock")}</p>
+                     <p className="text-[10px] opacity-50">{t("Lock after inactivity")}</p>
                    </div>
                  </div>
-                 <button 
-                   onClick={() => pushToFirebase({...data, settings: {...data.settings, highContrast: !data.settings?.highContrast}})}
-                   className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.highContrast ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-300'}`}
+                 <select 
+                   value={data.settings?.autoLockTime || '5'}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoLockTime: e.target.value}})}
+                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
                  >
-                   <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.highContrast ? 'left-5' : 'left-0.5'}`}></div>
-                 </button>
+                   <option value="1">1 min</option>
+                   <option value="5">5 min</option>
+                   <option value="15">15 min</option>
+                   <option value="never">Never</option>
+                 </select>
+               </div>
+
+               {/* Data Encryption - Always ON */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <Lock size={18} className="text-green-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Data Encryption")}</p>
+                     <p className="text-[10px] opacity-50">{t("AES-256 encryption")}</p>
+                   </div>
+                 </div>
+                 <span className="px-2 py-1 bg-green-100 text-green-600 rounded-lg text-[10px] font-bold flex items-center gap-1">
+                   <CheckCircle size={10}/> Enabled
+                 </span>
                </div>
              </div>
            </div>
+         </div>
+       )}
 
-           {/* 📍 BUSINESS LOCATION */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-teal-900/30 border-teal-500/30' : 'bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200'}`}>
-             <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-xl shadow-lg">
-                 <Pin size={18} className="text-white" />
+       {/* ☁️ BACKUP TAB */}
+       {settingsTab === 'backup' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-2xl shadow-lg">
+                 <Download size={24} className="text-white" />
                </div>
-               <div>
-                 <h3 className="font-bold text-sm">{t("Business Location")}</h3>
-                 <p className="text-[10px] opacity-60">{t("For invoices & delivery")}</p>
+               <div className="flex-1">
+                 <h3 className="font-bold text-lg">{t("Cloud & Backup")}</h3>
+                 <p className="text-xs opacity-60">{t("Never lose your data")}</p>
                </div>
+               <span className="px-2 py-1 bg-green-500 text-white rounded-lg text-[10px] font-bold flex items-center gap-1">
+                 <CheckCircle size={10}/> Synced
+               </span>
              </div>
-             
+
              <div className="space-y-2">
-               <input 
-                 type="text"
-                 placeholder={t("Shop Address")}
-                 value={data.settings?.shopAddress || ''}
-                 onChange={e => pushToFirebase({...data, settings: {...data.settings, shopAddress: e.target.value}})}
-                 className={`w-full p-3 rounded-xl border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
-               />
-               <div className="grid grid-cols-2 gap-2">
-                 <input 
-                   type="text"
-                   placeholder={t("City")}
-                   value={data.settings?.shopCity || ''}
-                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopCity: e.target.value}})}
-                   className={`p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
-                 />
-                 <input 
-                   type="text"
-                   placeholder={t("PIN Code")}
-                   value={data.settings?.shopPincode || ''}
-                   onChange={e => pushToFirebase({...data, settings: {...data.settings, shopPincode: e.target.value}})}
-                   className={`p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
-                 />
+               {/* Auto Backup Frequency */}
+               <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                 <div className="flex items-center gap-3">
+                   <SaveAll size={18} className="text-cyan-500" />
+                   <div>
+                     <p className="text-sm font-semibold">{t("Auto Backup")}</p>
+                     <p className="text-[10px] opacity-50">{t("Schedule backups")}</p>
+                   </div>
+                 </div>
+                 <select 
+                   value={data.settings?.autoBackup || 'daily'}
+                   onChange={e => pushToFirebase({...data, settings: {...data.settings, autoBackup: e.target.value}})}
+                   className={`px-3 py-1 rounded-lg text-xs font-bold border ${isDark ? 'bg-slate-600 border-slate-500 text-white' : 'bg-gray-100 border-gray-300'}`}
+                 >
+                   <option value="hourly">Hourly</option>
+                   <option value="daily">Daily</option>
+                   <option value="weekly">Weekly</option>
+                   <option value="manual">Manual</option>
+                 </select>
                </div>
-               <input 
-                 type="text"
-                 placeholder={t("GST Number (Optional)")}
-                 value={data.settings?.gstNumber || ''}
-                 onChange={e => pushToFirebase({...data, settings: {...data.settings, gstNumber: e.target.value}})}
-                 className={`w-full p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-white border-gray-200'}`}
-               />
+
+               {/* Export Data */}
+               <button 
+                 onClick={() => {
+                   const exportData = JSON.stringify(data, null, 2);
+                   const blob = new Blob([exportData], { type: 'application/json' });
+                   const url = URL.createObjectURL(blob);
+                   const a = document.createElement('a');
+                   a.href = url;
+                   a.download = `${data.settings?.shopName || 'shop'}_backup_${new Date().toISOString().split('T')[0]}.json`;
+                   a.click();
+                   showToast(t("Backup Downloaded!"));
+                 }}
+                 className={`w-full p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}
+               >
+                 <div className="flex items-center gap-3">
+                   <FileText size={18} className="text-green-500" />
+                   <div className="text-left">
+                     <p className="text-sm font-semibold">{t("Export Data")}</p>
+                     <p className="text-[10px] opacity-50">{t("Download JSON backup")}</p>
+                   </div>
+                 </div>
+                 <div className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-bold flex items-center gap-1">
+                   <Download size={12}/> Export
+                 </div>
+               </button>
+
+               {/* Last Backup Info */}
+               <div className={`p-3 rounded-xl ${isDark ? 'bg-cyan-900/30' : 'bg-cyan-50'} flex items-center justify-between`}>
+                 <span className="text-xs opacity-70">{t("Last Backup")}</span>
+                 <span className="text-xs font-bold">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
+               </div>
              </div>
            </div>
 
-           {/* ⚡ PERFORMANCE MODE */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 to-amber-900/30 border-amber-500/30' : 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200'}`}>
+           {/* Performance Mode */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
              <div className="flex items-center gap-2 mb-3">
-               <div className="p-2 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-xl shadow-lg">
-                 <Zap size={18} className="text-white" />
-               </div>
-               <div>
-                 <h3 className="font-bold text-sm">{t("Performance Mode")}</h3>
-                 <p className="text-[10px] opacity-60">{t("Optimize for your device")}</p>
-               </div>
+               <Zap size={18} className="text-amber-500"/>
+               <span className="font-bold">{t("Performance")}</span>
              </div>
-             
              <div className="space-y-2">
                {[
                  { id: 'batterySaver', icon: Vibrate, label: t('Battery Saver'), desc: t('Reduce animations'), color: 'text-green-500' },
                  { id: 'lowDataMode', icon: Wifi, label: t('Low Data Mode'), desc: t('Compress images'), color: 'text-blue-500' },
                  { id: 'offlineFirst', icon: WifiOff, label: t('Offline First'), desc: t('Work without internet'), color: 'text-purple-500' },
                ].map(item => (
-                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-white/80 border-gray-200'}`}>
+                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
                    <div className="flex items-center gap-3">
                      <item.icon size={18} className={item.color} />
                      <div>
@@ -5189,202 +5460,99 @@ function DukanRegister() {
                ))}
              </div>
            </div>
+         </div>
+       )}
 
-           {/* 🏆 BUSINESS ACHIEVEMENTS */}
-           <div className={`p-4 rounded-2xl border mb-4 relative overflow-hidden ${isDark ? 'bg-gradient-to-br from-slate-800 via-yellow-900/20 to-amber-900/30 border-yellow-500/30' : 'bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-yellow-200'}`}>
-             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-yellow-400/20 to-amber-400/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-             <div className="relative">
-               <div className="flex items-center gap-2 mb-3">
-                 <div className="p-2 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-xl shadow-lg">
-                   <ShieldCheck size={18} className="text-white" />
-                 </div>
-                 <div>
-                   <h3 className="font-bold text-sm">{t("Business Achievements")}</h3>
-                   <p className="text-[10px] opacity-60">{t("Your milestones")}</p>
-                 </div>
+       {/* ❓ HELP TAB */}
+       {settingsTab === 'help' && (
+         <div className="space-y-4 animate-in fade-in duration-300">
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+             <div className="flex items-center gap-3 mb-4">
+               <div className="p-3 bg-gradient-to-br from-gray-500 to-slate-500 rounded-2xl shadow-lg">
+                 <HelpCircle size={24} className="text-white" />
                </div>
-               
-               <div className="grid grid-cols-3 gap-2">
-                 {[
-                   { icon: '🏪', label: t('Active Days'), value: '30+' },
-                   { icon: '📦', label: t('Products'), value: (data.entries?.length || 0).toString() },
-                   { icon: '📊', label: t('Transactions'), value: (data.bills?.length || 0).toString() },
-                 ].map((stat, i) => (
-                   <div key={i} className={`p-2 rounded-xl text-center ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                     <span className="text-2xl">{stat.icon}</span>
-                     <p className="text-lg font-bold">{stat.value}</p>
-                     <p className="text-[9px] opacity-60">{stat.label}</p>
-                   </div>
-                 ))}
-               </div>
-               
-               <div className={`mt-3 p-2 rounded-xl ${isDark ? 'bg-gradient-to-r from-yellow-900/50 to-amber-900/50' : 'bg-gradient-to-r from-yellow-100 to-amber-100'}`}>
-                 <div className="flex items-center justify-between text-xs">
-                   <span className="flex items-center gap-1"><Activity size={12} className="text-orange-500"/> {t("Business Level")}</span>
-                   <span className="font-bold flex items-center gap-1">
-                     <CheckCircle size={12} className="text-yellow-500"/>
-                     {(data.entries?.length || 0) > 100 ? 'Gold' : (data.entries?.length || 0) > 50 ? 'Silver' : 'Bronze'}
-                   </span>
-                 </div>
-                 <div className="mt-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                   <div 
-                     className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full transition-all"
-                     style={{ width: `${Math.min(100, ((data.entries?.length || 0) / 100) * 100)}%` }}
-                   ></div>
-                 </div>
+               <div>
+                 <h3 className="font-bold text-lg">{t("Help & Support")}</h3>
+                 <p className="text-xs opacity-60">{t("Get assistance")}</p>
                </div>
              </div>
-           </div>
-       </div>
 
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Shop Profile")}</p>
-           <div className={`p-4 rounded-xl border mb-3 border-purple-300 ${isDark ? 'bg-slate-800' : 'bg-purple-50'}`}>
-                <label className="font-bold block mb-1 text-purple-800 text-xs uppercase">{t("Shop Name")}</label>
-                <div className="flex gap-2">
-                    <input type="text" className="flex-1 p-2 rounded border text-black" value={data.settings.shopName || ''} onChange={e => pushToFirebase({...data, settings: {...data.settings, shopName: e.target.value}})} placeholder="Enter Shop Name" />
-                    <div className="p-2 bg-purple-200 rounded"><Store size={20} className="text-purple-700"/></div>
-                </div>
-           </div>
-
-           <div className={`p-4 rounded-xl border mb-3 border-orange-300 ${isDark ? 'bg-slate-800' : 'bg-orange-50'}`}>
-               <label className="font-bold block mb-1 text-orange-800 text-xs uppercase flex justify-between">
-                   {t("Your Customer ID (Support)")}
-               </label>
-               <div className="flex gap-2 items-center">
-                   <code className="flex-1 p-2 bg-white/50 border border-orange-200 rounded font-mono text-sm break-all select-all text-orange-900">
-                       {user.uid}
-                   </code>
-                   <button onClick={() => { navigator.clipboard.writeText(user.uid); showToast("ID Copied!"); }} className="p-2 bg-orange-500 text-white rounded-lg active:scale-95 transition-transform shadow">
-                       <Copy size={20}/>
-                   </button>
-               </div>
-           </div>
-       </div>
-
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Preferences")}</p>
-           
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-             <div className="flex justify-between items-center">
-                 <div><h3 className="font-bold">{t("Notifications")}</h3><p className="text-xs opacity-70">{notifPermission === 'granted' ? t("Alerts are Active") : t("Allow sound & popups")}</p></div>
-                 {notifPermission === 'granted' ? <button className="bg-green-100 text-green-700 border border-green-500 px-3 py-1 rounded font-bold flex items-center gap-2 cursor-default text-xs"><CheckCircle size={14}/> Active</button> : <button onClick={requestNotificationPermission} className="bg-green-600 text-white px-3 py-1 rounded font-bold flex items-center gap-2 active:scale-95 transition-transform text-xs"><Bell size={14}/> Enable</button>}
+             <div className="space-y-2">
+               <button onClick={() => setIsPrivacyOpen(true)} className={`w-full p-3 rounded-xl border text-left flex items-center gap-3 ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                 <FileText size={20} className="text-gray-500"/> 
+                 <span className="font-semibold">{t("Privacy Policy")}</span>
+                 <ChevronRight size={16} className="ml-auto opacity-50"/>
+               </button>
+               <button onClick={() => setIsFaqOpen(true)} className={`w-full p-3 rounded-xl border text-left flex items-center gap-3 ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                 <HelpCircle size={20} className="text-blue-500"/> 
+                 <span className="font-semibold">{t("FAQ")}</span>
+                 <ChevronRight size={16} className="ml-auto opacity-50"/>
+               </button>
+               <a href="tel:8619152422" className={`w-full p-3 rounded-xl border text-left flex items-center gap-3 ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
+                 <MessageSquare size={20} className="text-green-500"/> 
+                 <span className="font-semibold">{t("Contact Support")}</span>
+                 <ExternalLink size={14} className="ml-auto opacity-50"/>
+               </a>
              </div>
            </div>
 
-           {/* 📳 SHAKE TO SEARCH TOGGLE */}
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-             <div className="flex justify-between items-center">
-                 <div>
-                   <h3 className="font-bold flex items-center gap-2">
-                     <Activity size={16} className="text-blue-500" /> {t("Shake to Search")}
-                   </h3>
-                   <p className="text-xs opacity-70">{t("Shake phone to activate voice search")}</p>
-                 </div>
-                 <button 
-                   onClick={() => setShakeEnabled(!shakeEnabled)} 
-                   className={`px-3 py-1 rounded font-bold flex items-center gap-2 text-xs border ${shakeEnabled ? 'bg-blue-100 text-blue-700 border-blue-500' : 'bg-gray-100 text-gray-400 border-gray-300'}`}
-                 >
-                   {shakeEnabled ? <><CheckCircle size={14}/> ON</> : 'OFF'}
-                 </button>
-             </div>
-           </div>
+           {/* Logout */}
+           <button onClick={handleLogout} className="w-full py-3 border-2 border-red-400 bg-red-50 text-red-600 rounded-xl font-bold flex items-center justify-center gap-2">
+             <LogOut size={20}/> {t("Logout")}
+           </button>
 
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-             <label className="font-bold block mb-2">{t("Low Stock Limit Alert")}</label>
-             <div className="flex items-center gap-4 mb-2">
-                 <input type="range" min="1" max="20" value={tempLimit} onChange={(e) => setTempLimit(parseInt(e.target.value))} className="flex-1 accent-blue-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"/>
-                 <span className="text-2xl font-bold w-8 text-center">{tempLimit}</span>
-             </div>
-             <button onClick={() => { triggerConfirm("Update Limit?", `Set low stock limit to ${tempLimit}?`, false, () => pushToFirebase({...data, settings: {...data.settings, limit: tempLimit}}))}} className="w-full py-2 bg-blue-100 text-blue-700 rounded font-bold text-sm">
-                 {t("Set & Save Limit")}
-             </button>
-           </div>
-           
-           <div className={`p-4 rounded-xl border mb-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-             <label className="font-bold block mb-2">{t("Theme")}</label>
-             <div className="flex gap-2"><button onClick={() => { triggerConfirm("Change Theme?", "Switch to Light Mode?", false, () => pushToFirebase({...data, settings: {...data.settings, theme: 'light'}}))}} className="flex-1 py-2 border rounded font-bold">Light</button><button onClick={() => { triggerConfirm("Change Theme?", "Switch to Dark Mode?", false, () => pushToFirebase({...data, settings: {...data.settings, theme: 'dark'}}))}} className="flex-1 py-2 border bg-slate-700 text-white rounded font-bold">Dark</button></div>
-           </div>
-       </div>
-
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Security")}</p>
-           <div className={`p-4 rounded-xl border mb-3 border-blue-300 ${isDark ? 'bg-slate-800' : 'bg-blue-50'}`}>
-             <label className="font-bold block mb-2 text-blue-600 text-xs uppercase">{t("Change Product Password")}</label>
-             <input type="text" placeholder={t("New Product Password")} className="w-full p-2 border rounded mb-2 text-black" value={newProductPass} onChange={e => setNewProductPass(e.target.value)}/>
-             <button onClick={() => { triggerConfirm("Change Password?", "Update product security password?", false, () => { pushToFirebase({...data, settings: {...data.settings, productPassword: newProductPass}}); setNewProductPass(''); showToast(t("Product Password Updated!")); })}} className="w-full py-2 bg-blue-600 text-white font-bold rounded text-sm">{t("Update Password")}</button>
-           </div>
-       </div>
-
-       <div className="mb-6">
-           <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-2 pl-1">{t("Legal & Support")}</p>
-           
-           <div className="flex flex-col gap-2">
-                <button onClick={() => setIsPrivacyOpen(true)} className={`p-3 rounded-lg border text-left flex items-center gap-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-                    <FileText size={20} className="text-gray-500"/> <span className="font-bold">{t("Privacy & Policy")}</span>
-                </button>
-                <button onClick={() => setIsFaqOpen(true)} className={`p-3 rounded-lg border text-left flex items-center gap-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-                    <HelpCircle size={20} className="text-gray-500"/> <span className="font-bold">{t("FAQ")}</span>
-                </button>
-                <a href="tel:8619152422" className={`p-3 rounded-lg border text-left flex items-center gap-3 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-300'}`}>
-                    <MessageSquare size={20} className="text-green-500"/> <span className="font-bold">{t("Feedback / Contact")}</span> <ExternalLink size={14} className="ml-auto opacity-50"/>
-                </a>
-           </div>
-       </div>
-
-       <button onClick={handleLogout} className="w-full py-3 border-2 border-red-400 bg-red-50 text-red-600 rounded-lg font-bold flex items-center justify-center gap-2"><LogOut size={20}/> {t("Logout Shop")}</button>
-       
-       <div className="mt-8 pb-6">
-           {/* App Version & Premium Badge */}
-           <div className={`mb-4 p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 via-purple-900/30 to-blue-900/30 border-purple-500/30' : 'bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 border-purple-200'}`}>
+           {/* App Info */}
+           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 via-purple-900/30 to-blue-900/30 border-purple-500/30' : 'bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 border-purple-200'}`}>
              <div className="flex items-center justify-between mb-3">
                <div className="flex items-center gap-2">
                  <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                    <Zap size={20} className="text-white" />
                  </div>
                  <div>
-                   <p className="font-bold text-sm">{data.settings?.shopName || 'AutoGear'}</p>
-                   <p className="text-[10px] opacity-50">v2.0 Final Edition</p>
+                   <p className="font-bold text-sm">{data.settings?.shopName || 'Autonex'}</p>
+                   <p className="text-[10px] opacity-50">v3.0 Pro Edition</p>
                  </div>
                </div>
-               <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 shadow">
-                 <ShieldCheck size={12} className="text-white" />
-                 <span className="text-[10px] font-bold text-white">PRO</span>
-               </div>
+               <span className="px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-[10px] font-bold text-white flex items-center gap-1">
+                 <ShieldCheck size={10}/> PRO
+               </span>
              </div>
              
-             <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+             <div className="grid grid-cols-3 gap-2 text-center text-[10px] mb-3">
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                 <Activity size={16} className="mx-auto text-purple-500 mb-1"/>
+                 <Activity size={14} className="mx-auto text-purple-500 mb-1"/>
                  <span className="font-semibold">{t("AI Powered")}</span>
                </div>
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                 <Shield size={16} className="mx-auto text-green-500 mb-1"/>
+                 <Shield size={14} className="mx-auto text-green-500 mb-1"/>
                  <span className="font-semibold">{t("Secure")}</span>
                </div>
                <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                 <Download size={16} className="mx-auto text-blue-500 mb-1"/>
+                 <Download size={14} className="mx-auto text-blue-500 mb-1"/>
                  <span className="font-semibold">{t("Cloud Sync")}</span>
                </div>
              </div>
-           </div>
-           
-           {/* Parent Company */}
-           <div className="text-center opacity-70">
-             <p className="text-[9px] uppercase tracking-widest mb-2">{t("Developed & Powered By")}</p>
-             <div className={`inline-flex items-center gap-2 px-5 py-2 rounded-full shadow-md ${isDark ? 'bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500' : 'bg-gradient-to-r from-slate-100 to-white border border-slate-200'}`}>
-               <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                 <Zap size={12} className="text-white" />
+
+             <div className="text-center">
+               <p className="text-[9px] uppercase tracking-widest opacity-50 mb-1">{t("Developed By")}</p>
+               <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
+                 <div className="w-5 h-5 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                   <Zap size={10} className="text-white" />
+                 </div>
+                 <span className="font-bold text-xs">AutomationX</span>
+                 <CheckCircle size={12} className="text-blue-500" />
                </div>
-               <p className="font-bold text-sm">AutomationX</p>
-               <CheckCircle size={16} className="text-blue-500" />
+               <p className="text-[8px] mt-2 opacity-40">© 2024 All Rights Reserved</p>
              </div>
-             <p className="text-[8px] mt-2 opacity-50">© 2024 All Rights Reserved</p>
            </div>
+         </div>
+       )}
        </div>
     </div>
     );
   };
+
+
 
   return (
     <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950' : 'bg-white'} ${!isOnline ? 'pt-10' : ''}`}>
