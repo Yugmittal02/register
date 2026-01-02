@@ -678,7 +678,8 @@ const synonymMap = {
 // ---------------------------------------------------------
 // 🔍 INTELLIGENT SEARCH ALGORITHM (Fuzzy Brain)
 // ---------------------------------------------------------
-const performSmartSearch = (rawTranscript, inventory, pages) => {
+const performSmartSearch = (rawTranscript, inventory, pages, options: { useFuzzy?: boolean } = {}) => {
+  const useFuzzy = options.useFuzzy !== false;
     // Step A: Normalize & Translate (Tel -> Oil)
     let processedText = rawTranscript.toLowerCase().trim();
     
@@ -711,17 +712,22 @@ const performSmartSearch = (rawTranscript, inventory, pages) => {
         const combinedText = `${itemCar} ${itemName}`;
         
         keywords.forEach(word => {
-            // Exact match = 10 points
-            if (combinedText.includes(word)) score += 10;
-            
-            // Partial match (for typos) = 5 points
-            else if (word.length > 3) {
-                const partialWord = word.slice(0, -1); // Remove last char for typo tolerance
-                if (combinedText.includes(partialWord)) score += 5;
-            }
-            
-            // First letter match (very loose) = 2 points
-            else if (combinedText.split(' ').some(w => w.startsWith(word[0]))) score += 2;
+          // Exact match = 10 points
+          if (combinedText.includes(word)) {
+            score += 10;
+            return;
+          }
+
+          if (!useFuzzy) return;
+
+          // Partial match (for typos) = 5 points
+          if (word.length > 3) {
+            const partialWord = word.slice(0, -1); // Remove last char for typo tolerance
+            if (combinedText.includes(partialWord)) score += 5;
+          }
+
+          // First letter match (very loose) = 2 points
+          else if (combinedText.split(' ').some(w => w.startsWith(word[0]))) score += 2;
         });
 
         return { ...item, score, pageName: itemName };
@@ -751,9 +757,10 @@ const useShakeSensor = (onShake, enabled = true) => {
         let shakeCount = 0;
         let lastTime = Date.now();
         let lastX = 0, lastY = 0, lastZ = 0;
-        const SHAKE_THRESHOLD = 20; // Higher sensitivity to avoid accidental triggers
-        const SHAKE_TIMEOUT = 3000; // Reset count if not shaken again within 3 sec (more time to complete shakes)
-        const REQUIRED_SHAKES = 7; // Need 7 shakes to trigger (prevents accidental activation)
+        // Hard mode: trigger only on intentional strong shaking
+        const SHAKE_THRESHOLD = 35; // Higher threshold = only strong shakes counted
+        const SHAKE_TIMEOUT = 8000; // More time to complete many shakes
+        const REQUIRED_SHAKES = 25; // Need ~20-30 shakes to trigger
 
         const handleMotion = (e) => {
             const { x, y, z } = e.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
@@ -861,7 +868,7 @@ const getSmartLocalResponse = (question: string, lang: string): string => {
     const isHindi = lang === 'hi';
     
     // Greetings
-    if (/\b(hello|hi|hey|namaste|namaskar)\b/i.test(q)) {
+  if (/\b(hello|hi|hey|hlo|helo|namaste|namaskar|pranam|ram\s*ram)\b/i.test(q)) {
         return isHindi ? 'नमस्ते! मैं आपकी क्या मदद कर सकता हूं?' : 'Hello! How can I help you today?';
     }
     
@@ -923,15 +930,15 @@ const getSmartLocalResponse = (question: string, lang: string): string => {
     }
     
     // Default response
-    return isHindi 
-        ? 'मैं इस सवाल का जवाब नहीं दे पा रहा। कृपया दूसरे शब्दों में पूछें।' 
-        : 'I couldn\'t understand that. Please try asking differently.';
+    return isHindi
+      ? 'मैं समझ नहीं पाया। कृपया थोड़ा सरल शब्दों में पूछें, या बताएं कि आप स्टॉक, बिल, टूल्स, या सेटिंग्स में क्या करना चाहते हैं।'
+      : 'I didn\'t fully understand. Please rephrase, or tell me if this is about stock, bills, tools, or settings.';
 };
 
 // ---------------------------------------------------------
 // 👻 GHOST MIC COMPONENT (Hands-Free Voice Search + AI Assistant)
 // ---------------------------------------------------------
-const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
+const GhostMic = ({ inventory, pages, onClose, onNavigate, allowAI = true, useFuzzySearch = true }) => {
     const [status, setStatus] = useState("Listening...");
     const [resultText, setResultText] = useState("");
     const [searchResult, setSearchResult] = useState(null);
@@ -944,6 +951,14 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
         const isHindi = /[\u0900-\u097F]/.test(text) || 
                        /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho|mein|ka|ki|ke)\b/i.test(text);
         return isHindi ? 'hi' : 'en';
+    };
+
+    const isGreeting = (text: string) => /\b(hello|hi|hey|hlo|helo|namaste|namaskar|pranam|ram\s*ram)\b/i.test((text || '').trim());
+
+    // Special rule: if user says "hello" etc (English greeting), reply in Hindi.
+    const resolveResponseLanguage = (transcript: string, detectedLang: string) => {
+      if (isGreeting(transcript)) return 'hi';
+      return detectedLang;
     };
 
     // Text to Speech Helper - responds in same language
@@ -985,9 +1000,10 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
             const detectedLang = detectLanguage(transcript);
+            const responseLang = resolveResponseLanguage(transcript, detectedLang);
 
             // First, try stock search
-            const stockResult = performSmartSearch(transcript, inventory, pages);
+            const stockResult = performSmartSearch(transcript, inventory, pages, { useFuzzy: useFuzzySearch });
 
             if (stockResult.match && stockResult.items.length > 0) {
                 // Stock found - show stock results
@@ -1008,17 +1024,26 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate }) => {
                 setStatus("🤖 AI Thinking...");
                 
                 try {
-                    const aiAnswer = await askAIAssistant(transcript, detectedLang);
-                    setAiResponse(aiAnswer);
-                    setStatus("🤖 AI Response");
-                    speak(aiAnswer, detectedLang);
+                if (!allowAI) {
+                  const msg = responseLang === 'hi'
+                    ? 'AI बंद है। सेटिंग्स में जाकर "Voice AI Commands" ऑन करें या स्टॉक के लिए सर्च करें।'
+                    : 'AI is turned off. Enable “Voice AI Commands” in Settings, or search for stock.';
+                  setAiResponse(msg);
+                  setStatus("🤖 AI Off");
+                  speak(msg, responseLang);
+                } else {
+                  const aiAnswer = await askAIAssistant(transcript, responseLang);
+                  setAiResponse(aiAnswer);
+                  setStatus("🤖 AI Response");
+                  speak(aiAnswer, responseLang);
+                }
                 } catch (e) {
-                    const fallback = detectedLang === 'hi' 
+                const fallback = responseLang === 'hi' 
                         ? 'माफ करें, जवाब नहीं मिला। कृपया दोबारा पूछें।'
                         : 'Sorry, could not find an answer. Please try again.';
                     setAiResponse(fallback);
                     setStatus("🤖 AI Response");
-                    speak(fallback, detectedLang);
+                speak(fallback, responseLang);
                 }
             }
             
@@ -1427,33 +1452,75 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
 // ---------------------------------------------------------
 const SalesPredictionWidget = ({ data, t, isDark }) => {
     const prediction = useMemo(() => {
-        // Simulate historical data from entries
-        const entries = data.entries || [];
-        if (entries.length < 5) return null;
-        
-        // Generate mock sales data based on stock changes
-        const mockSales = entries.slice(0, 14).map((_, i) => Math.floor(Math.random() * 50) + 10);
-        
-        // Use exponential smoothing for prediction
-        const nextDayPrediction = AIEngine.exponentialSmoothing(mockSales, 0.3);
-        const weeklyPrediction = nextDayPrediction * 7;
-        
-        // Calculate trend
-        const recentAvg = mockSales.slice(-3).reduce((a, b) => a + b, 0) / 3;
-        const olderAvg = mockSales.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
-        const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable';
-        const trendPercent = Math.abs(Math.round(((recentAvg - olderAvg) / olderAvg) * 100));
-        
-        return {
-            daily: Math.round(nextDayPrediction),
-            weekly: Math.round(weeklyPrediction),
-            trend,
-            trendPercent,
-            confidence: 75 + Math.floor(Math.random() * 15)
-        };
-    }, [data.entries]);
+    const events = (data.salesEvents || []).filter((e: any) => e && e.type === 'sale');
+    if (!events.length) return null;
 
-    if (!prediction || !data.settings?.aiPredictions) return null;
+    const days = 14;
+    const dayKeys: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+
+    const totalsByDay = new Map<string, number>();
+    for (const key of dayKeys) totalsByDay.set(key, 0);
+
+    for (const ev of events) {
+      const ts = typeof ev.ts === 'number' ? ev.ts : (ev.date ? Date.parse(ev.date) : NaN);
+      if (!Number.isFinite(ts)) continue;
+      const day = new Date(ts).toISOString().slice(0, 10);
+      if (!totalsByDay.has(day)) continue;
+      const qty = Number(ev.qty || 0);
+      if (qty > 0) totalsByDay.set(day, (totalsByDay.get(day) || 0) + qty);
+    }
+
+    const series = dayKeys.map(k => totalsByDay.get(k) || 0);
+    const total = series.reduce((a, b) => a + b, 0);
+    if (total <= 0) return null;
+
+    const nextDayPrediction = AIEngine.exponentialSmoothing(series, 0.35);
+    const weeklyPrediction = nextDayPrediction * 7;
+
+    const recentAvg = series.slice(-3).reduce((a, b) => a + b, 0) / 3;
+    const olderAvg = series.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+    const trend = recentAvg > olderAvg ? 'up' : recentAvg < olderAvg ? 'down' : 'stable';
+    const trendPercent = olderAvg > 0 ? Math.abs(Math.round(((recentAvg - olderAvg) / olderAvg) * 100)) : 0;
+
+    const nonZeroDays = series.filter(v => v > 0).length;
+    const confidence = Math.min(95, Math.max(55, Math.round(50 + (nonZeroDays / days) * 45)));
+
+    return {
+      daily: Math.max(0, Math.round(nextDayPrediction)),
+      weekly: Math.max(0, Math.round(weeklyPrediction)),
+      trend,
+      trendPercent,
+      confidence
+    };
+  }, [data.salesEvents]);
+
+    if (!data.settings?.aiPredictions) return null;
+
+    if (!prediction) {
+      return (
+        <div className="mx-4 mt-4">
+          <div className={`p-4 rounded-2xl ${isDark ? 'bg-slate-800' : 'bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50'} border ${isDark ? 'border-slate-700' : 'border-indigo-200'}`}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <Activity size={16} className="text-white"/>
+              </div>
+              <div>
+                <h3 className={`font-bold text-sm ${isDark ? 'text-white' : 'text-gray-800'}`}>{t("Sales Prediction")}</h3>
+                <p className="text-[10px] text-gray-500">{t("No sales history yet")}</p>
+              </div>
+            </div>
+            <p className={`mt-3 text-xs ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>
+              {t("Update stock (sell/restock) to generate real reports.")}
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
         <div className="mx-4 mt-4">
@@ -1480,7 +1547,7 @@ const SalesPredictionWidget = ({ data, t, isDark }) => {
                 
                 <div className="grid grid-cols-3 gap-3">
                   <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
-                    <p className="text-2xl font-black text-indigo-600">{prediction.today}</p>
+                    <p className="text-2xl font-black text-indigo-600">{prediction.daily}</p>
                     <p className="text-[10px] text-gray-500 font-bold">TODAY</p>
                   </div>
                     <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-slate-700' : 'bg-white/60'}`}>
@@ -3372,6 +3439,7 @@ const defaultData = {
   pages: [], 
   entries: [], 
   bills: [], 
+  salesEvents: [],
   settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Autonex', pinnedTools: [] },
   appStatus: 'active'
 };
@@ -4207,17 +4275,41 @@ function DukanRegister() {
           return;
       }
       
-      let lowStockTriggered = 0;
-      const updatedEntries = data.entries.map(e => {
+        let lowStockTriggered = 0;
+        const nowTs = Date.now();
+        const nowIso = new Date(nowTs).toISOString();
+        const newSalesEvents: any[] = [];
+
+        const updatedEntries = data.entries.map(e => {
           if (tempChanges[e.id] !== undefined) {
-              const finalQty = tempChanges[e.id];
-              if (finalQty < data.settings.limit) lowStockTriggered++;
-              return { ...e, qty: finalQty };
+            const finalQty = tempChanges[e.id];
+            if (finalQty < data.settings.limit) lowStockTriggered++;
+
+            const prevQty = Number(e.qty || 0);
+            const nextQty = Number(finalQty || 0);
+            const delta = nextQty - prevQty;
+
+            if (delta !== 0) {
+              newSalesEvents.push({
+                id: `${nowTs}-${e.id}`,
+                ts: nowTs,
+                date: nowIso,
+                type: delta < 0 ? 'sale' : 'restock',
+                entryId: e.id,
+                pageId: e.pageId,
+                car: e.car,
+                qty: Math.abs(delta)
+              });
+            }
+
+            return { ...e, qty: finalQty };
           }
           return e;
-      });
+        });
 
-      const success = await pushToFirebase({ ...data, entries: updatedEntries });
+        const mergedSalesEvents = ([...(data.salesEvents || []), ...newSalesEvents]).slice(-2000);
+
+        const success = await pushToFirebase({ ...data, entries: updatedEntries, salesEvents: mergedSalesEvents });
       if(success) {
           setTempChanges({}); 
           setIsSaveModalOpen(false); 
@@ -4267,7 +4359,7 @@ function DukanRegister() {
       if (cached) return cached;
       
       // Use smart search algorithm for better results
-      const smartResult = performSmartSearch(term, data.entries || [], data.pages || []);
+      const smartResult = performSmartSearch(term, data.entries || [], data.pages || [], { useFuzzy: data.settings?.fuzzySearch !== false });
       
       let results: any[];
       if (smartResult.match && smartResult.items.length > 0) {
@@ -4301,7 +4393,7 @@ function DukanRegister() {
               filtered = cached;
           } else {
               // Smart fuzzy filter
-              const smartResult = performSmartSearch(safeSearch, pageEntries, data.pages || []);
+              const smartResult = performSmartSearch(safeSearch, pageEntries, data.pages || [], { useFuzzy: data.settings?.fuzzySearch !== false });
               if (smartResult.match && smartResult.items.length > 0) {
                   filtered = smartResult.items;
               } else {
@@ -5580,6 +5672,8 @@ function DukanRegister() {
         <GhostMic 
           inventory={data.entries || []}
           pages={data.pages || []}
+          allowAI={data.settings?.voiceAI !== false}
+          useFuzzySearch={data.settings?.fuzzySearch !== false}
           onClose={() => setIsGhostMicOpen(false)}
           onNavigate={(pageId) => {
             setActivePageId(pageId);
