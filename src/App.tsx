@@ -654,7 +654,9 @@ const synonymMap = {
     
     // Body Parts  
     "sheesha": "mirror", "glass": "mirror", "batti": "light", "headlight": "light",
-    "tail light": "back light", "bumper": "guard", "dabba": "kit",
+  "tail light": "back light", 
+  // "bumper": "guard" वाली लाइन हटा दी गई है
+  "dabba": "kit",
     "pahiya": "wheel", "tyre": "tire", "patti": "belt", "patla": "gasket",
     
     // Engine Parts
@@ -757,10 +759,10 @@ const useShakeSensor = (onShake, enabled = true) => {
         let shakeCount = 0;
         let lastTime = Date.now();
         let lastX = 0, lastY = 0, lastZ = 0;
-        // Hard mode: trigger only on intentional strong shaking
-        const SHAKE_THRESHOLD = 35; // Higher threshold = only strong shakes counted
-        const SHAKE_TIMEOUT = 8000; // More time to complete many shakes
-        const REQUIRED_SHAKES = 25; // Need ~20-30 shakes to trigger
+        // 🔥 UPDATE: Prevent accidental triggers
+        const SHAKE_THRESHOLD = 60;
+        const SHAKE_TIMEOUT = 1000;
+        const REQUIRED_SHAKES = 4;
 
         const handleMotion = (e) => {
             const { x, y, z } = e.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
@@ -823,13 +825,15 @@ const askAIAssistant = async (question: string, language: string = 'en'): Promis
     // Detect language from question for response
     const isHindiQuestion = /[\u0900-\u097F]/.test(question) || 
                            /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho)\b/i.test(question);
-    const responseLanguage = isHindiQuestion ? 'hi' : language;
+    
+  // अगर सवाल हिंदी में है तो जवाब हिंदी, वरना जो भाषा डिटेक्ट हुई है
+  const responseLanguage = isHindiQuestion ? 'hi' : language;
     
     try {
-        // Using free AI API for general questions
-        const systemPrompt = responseLanguage === 'hi' 
-            ? 'You are a helpful AI assistant. Answer in Hindi (Hinglish is fine). Keep answers short and helpful. If asked about stock/inventory, guide to search in the app.'
-            : 'You are a helpful AI assistant. Keep answers short, clear and helpful. If asked about stock/inventory, guide to search in the app.';
+    // 🔥 UPDATE: Smart General Purpose AI Prompt
+    const systemPrompt = responseLanguage === 'hi' 
+      ? 'You are a smart AI assistant. Answer exactly in the language the user speaks (Hindi/Hinglish). You can answer ANY question about general knowledge, math, science, life, coding, or business. Do not restrict yourself to shop inventory only. If the user specifically asks about "stock" or "inventory", guide them briefly. Otherwise, be helpful like Gemini.'
+      : 'You are a smart AI assistant. Answer in English. You can answer ANY question about general knowledge, math, science, life, coding, or business. Do not restrict yourself to shop inventory only. If the user specifically asks about "stock" or "inventory", guide them briefly. Otherwise, be helpful like Gemini.';
         
         // Try Groq API (free tier available)
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -844,7 +848,7 @@ const askAIAssistant = async (question: string, language: string = 'en'): Promis
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: question }
                 ],
-                max_tokens: 150,
+        max_tokens: 250, // Increased for better general answers
                 temperature: 0.7
             })
         });
@@ -1005,10 +1009,10 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate, allowAI = true, useFu
 
     const isGreeting = (text: string) => isGreetingText(text);
 
-    // Special rule: if user says a greeting (English/Hindi), reply in Hindi.
+    // Special rule: Just return the detected language (No forced Hindi on greeting)
     const resolveResponseLanguage = (transcript: string, detectedLang: string) => {
-      if (isGreeting(transcript)) return 'hi';
-      return detectedLang;
+      // if (isGreeting(transcript)) return 'hi'; <-- ❌ REMOVED THIS LINE
+      return detectedLang; // ✅ Returns English for "Hello", Hindi for "Namaste"
     };
 
     // Text to Speech Helper - responds in same language
@@ -4650,10 +4654,11 @@ function DukanRegister() {
       {/* 📊 QUICK STATS WIDGET */}
       <QuickStats data={data} />
 
-      {/* 🤖 AI INSIGHTS WIDGET */}
-      {(data.settings?.widgets?.aiInsights !== false) && (
-        <AIInsightsWidget data={data} t={t} isDark={isDark} />
-      )}
+      {/* 🤖 AI INSIGHTS WIDGET - REMOVED 
+         {(data.settings?.widgets?.aiInsights !== false) && (
+           <AIInsightsWidget data={data} t={t} isDark={isDark} />
+         )}
+      */}
 
       {/* 📈 SALES PREDICTION WIDGET */}
       {data.settings?.aiPredictions && (data.settings?.widgets?.predictions !== false) && (
