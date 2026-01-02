@@ -4632,20 +4632,7 @@ function DukanRegister() {
                 {isOnline ? <Wifi size={12}/> : <WifiOff size={12} className="animate-pulse"/>}
                 <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
               </div>
-              {/* 👻 Ghost Mic Button */}
-              <button 
-                onClick={() => setIsGhostMicOpen(true)} 
-                className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'hover:bg-slate-600' : 'hover:bg-blue-100'}`}
-                style={{
-                  color: accentHex,
-                  borderColor: hexToRgba(accentHex, 0.35),
-                  backgroundColor: isDark ? hexToRgba(accentHex, 0.12) : hexToRgba(accentHex, 0.08),
-                }}
-                title="Voice Search (or shake phone)"
-              >
-                <Mic size={18} />
-              </button>
-              <TranslateBtn />
+              <TranslateBtn />
           </div>
         </div>
         <div className="flex gap-2 mt-2">
@@ -4774,7 +4761,6 @@ function DukanRegister() {
                     <h1 className={`text-2xl font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-800'}`}><Search/> {t("Global Search")}</h1>
                     <div className="flex gap-2">
                         <button onClick={() => setIsSafeMode(!isSafeMode)} className={`p-1 rounded-full border ${isSafeMode ? 'bg-green-100 text-green-700 border-green-500' : 'bg-gray-200 text-gray-400'}`}>{isSafeMode ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}</button>
-                        <TranslateBtn />
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -4969,7 +4955,6 @@ function DukanRegister() {
        <div className={`sticky top-0 z-40 p-4 backdrop-blur-xl ${isDark ? 'bg-slate-900/90' : 'bg-gray-50/90'}`}>
          <div className="flex justify-between items-center mb-4">
            <h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> {t("Settings")}</h2>
-           <TranslateBtn />
          </div>
          
          {/* Tab Navigation */}
@@ -5147,10 +5132,9 @@ function DukanRegister() {
                  { id: 'priceOptimization', icon: DollarSign, label: t('Price Optimization'), desc: t('AI suggests pricing'), color: 'text-blue-500', gradient: 'from-blue-500 to-cyan-500' },
                  { id: 'fuzzySearch', icon: Search, label: t('Fuzzy Search'), desc: t('Find items with typos'), color: 'text-orange-500', gradient: 'from-orange-500 to-amber-500' },
                  { id: 'autoCategory', icon: Layers, label: t('Auto Categorization'), desc: t('AI groups products'), color: 'text-pink-500', gradient: 'from-pink-500 to-rose-500' },
-                 { id: 'voiceAI', icon: Mic, label: t('Voice AI Commands'), desc: t('Hindi/English voice control'), color: 'text-indigo-500', gradient: 'from-indigo-500 to-violet-500' },
                ].map(item => (
                  (() => {
-                   const defaultOn = item.id === 'voiceAI' || item.id === 'fuzzySearch';
+                   const defaultOn = item.id === 'fuzzySearch';
                    const isEnabled = defaultOn ? data.settings?.[item.id] !== false : !!data.settings?.[item.id];
                    return (
                  <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
