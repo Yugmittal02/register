@@ -819,49 +819,56 @@ const useShakeSensor = (onShake, enabled = true) => {
 };
 
 // ---------------------------------------------------------
-// 🤖 AI ASSISTANT API (Gemini-like responses)
+// 🤖 AI ASSISTANT API (REAL GEMINI INTEGRATION)
 // ---------------------------------------------------------
 const askAIAssistant = async (question: string, language: string = 'en'): Promise<string> => {
-    // Detect language from question for response
+    // 1. Detect if the question is basically Hindi/Hinglish
     const isHindiQuestion = /[\u0900-\u097F]/.test(question) || 
-                           /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho)\b/i.test(question);
+                           /\b(kya|hai|kaise|kahan|kaun|kitna|batao|bolo|dhundo|dekho|aaj|kal|mausam|weather)\b/i.test(question);
     
-  // अगर सवाल हिंदी में है तो जवाब हिंदी, वरना जो भाषा डिटेक्ट हुई है
-  const responseLanguage = isHindiQuestion ? 'hi' : language;
+    const responseLanguage = isHindiQuestion ? 'hi' : language;
+
+    // 2. Define the System Prompt (AI's Personality)
+    const systemPrompt = `You are "Autonex AI", a smart and friendly shop assistant. 
+    You manage an auto parts shop inventory but you are also very intelligent about general topics.
     
+    RULES:
+    1. If the user speaks Hindi or Hinglish, reply in Hindi (or Hinglish).
+    2. If the user speaks English, reply in English.
+    3. Keep answers concise (max 2-3 sentences) because you are a voice assistant.
+    4. You can answer ANY general question (Weather, Math, GK, Jokes, Life) like a smart human.
+    5. Be polite and helpful.`;
+
     try {
-    // 🔥 UPDATE: Smart General Purpose AI Prompt
-    const systemPrompt = responseLanguage === 'hi' 
-      ? 'You are a smart AI assistant. Answer exactly in the language the user speaks (Hindi/Hinglish). You can answer ANY question about general knowledge, math, science, life, coding, or business. Do not restrict yourself to shop inventory only. If the user specifically asks about "stock" or "inventory", guide them briefly. Otherwise, be helpful like Gemini.'
-      : 'You are a smart AI assistant. Answer in English. You can answer ANY question about general knowledge, math, science, life, coding, or business. Do not restrict yourself to shop inventory only. If the user specifically asks about "stock" or "inventory", guide them briefly. Otherwise, be helpful like Gemini.';
+        // 3. Call Google Gemini API
+        const API_KEY = "AIzaSyBDvhgjYjN3qpmjDB3EYnEGj0H6OPRvpLQ"; 
         
-        // Try Groq API (free tier available)
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer gsk_placeholder' // Replace with actual key in production
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'mixtral-8x7b-32768',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: question }
-                ],
-        max_tokens: 250, // Increased for better general answers
-                temperature: 0.7
+                contents: [{
+                    parts: [{
+                        text: `${systemPrompt}\n\nUser Question: ${question}`
+                    }]
+                }]
             })
         });
-        
-        if (response.ok) {
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || '';
+
+        const data = await response.json();
+
+        // 4. Extract Answer
+        if (data.candidates && data.candidates[0].content) {
+            return data.candidates[0].content.parts[0].text;
         }
-        
-        // Fallback to local smart responses
-        return getSmartLocalResponse(question, responseLanguage);
+
+        throw new Error("No response from AI");
+
     } catch (error) {
-        console.warn('AI API failed, using local response:', error);
+        console.error("AI API Error:", error);
+        // Fallback if API fails (Net issue or Quota full)
         return getSmartLocalResponse(question, responseLanguage);
     }
 };
@@ -1075,7 +1082,7 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate, allowAI = true, useFu
             } else {
                 // No stock found - use AI to answer the question
                 setMode('ai');
-                setStatus("🤖 AI Thinking...");
+                setStatus("� AI Thinking...");
                 
                 try {
                 if (!allowAI) {
