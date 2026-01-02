@@ -862,13 +862,63 @@ const askAIAssistant = async (question: string, language: string = 'en'): Promis
     }
 };
 
+const THEME_PRESETS: Record<string, { bg: string; meta: string; isDark: boolean }> = {
+  light: { bg: '#ffffff', meta: '#ffffff', isDark: false },
+  dark: { bg: '#0f172a', meta: '#0f172a', isDark: true },
+  blue: { bg: '#1e3a5f', meta: '#1e3a5f', isDark: true },
+  green: { bg: '#14532d', meta: '#14532d', isDark: true },
+  purple: { bg: '#4c1d95', meta: '#4c1d95', isDark: true },
+  orange: { bg: '#7c2d12', meta: '#7c2d12', isDark: true },
+  rose: { bg: '#4c0519', meta: '#4c0519', isDark: true },
+};
+
+const ACCENT_COLOR_HEX: Record<string, string> = {
+  blue: '#3b82f6',
+  green: '#22c55e',
+  purple: '#8b5cf6',
+  orange: '#f97316',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
+  red: '#ef4444',
+  yellow: '#eab308',
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const clean = (hex || '').replace('#', '').trim();
+  if (clean.length !== 6) return `rgba(59,130,246,${alpha})`;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+};
+
+const normalizeForMatch = (text: string): string => {
+  return (text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\n\r\t]+/g, ' ')
+    .replace(/[.,!?;:(){}\[\]"'’“”]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const isGreetingText = (text: string): boolean => {
+  const s = normalizeForMatch(text);
+  if (!s) return false;
+
+  // Note: JS \b doesn't work reliably for Hindi/Unicode letters, so we use (start|space) boundaries.
+  if (/(^|\s)(hello|hi|hey|hlo|helo|namaste|namaskar|pranam|ram\s*ram)(\s|$)/i.test(s)) return true;
+  if (/(^|\s)(हैलो|हेलो|हाय|नमस्ते|नमस्कार|प्रणाम|राम\s*राम|रामराम)(\s|$)/u.test(s)) return true;
+  return false;
+};
+
 // Smart local response generator (works offline)
 const getSmartLocalResponse = (question: string, lang: string): string => {
     const q = question.toLowerCase();
     const isHindi = lang === 'hi';
     
     // Greetings
-  if (/\b(hello|hi|hey|hlo|helo|namaste|namaskar|pranam|ram\s*ram)\b/i.test(q)) {
+  if (isGreetingText(question)) {
         return isHindi ? 'नमस्ते! मैं आपकी क्या मदद कर सकता हूं?' : 'Hello! How can I help you today?';
     }
     
@@ -953,9 +1003,9 @@ const GhostMic = ({ inventory, pages, onClose, onNavigate, allowAI = true, useFu
         return isHindi ? 'hi' : 'en';
     };
 
-    const isGreeting = (text: string) => /\b(hello|hi|hey|hlo|helo|namaste|namaskar|pranam|ram\s*ram)\b/i.test((text || '').trim());
+    const isGreeting = (text: string) => isGreetingText(text);
 
-    // Special rule: if user says "hello" etc (English greeting), reply in Hindi.
+    // Special rule: if user says a greeting (English/Hindi), reply in Hindi.
     const resolveResponseLanguage = (transcript: string, detectedLang: string) => {
       if (isGreeting(transcript)) return 'hi';
       return detectedLang;
@@ -3408,20 +3458,27 @@ const ImageModal = ({ src, onClose, onDelete }) => {
 };
 
 
-const NavBtn = ({ icon, label, active, onClick, alert, isDark }: any) => (
+const NavBtn = ({ icon, label, active, onClick, alert, isDark, accentHex }: any) => (
   <button 
     onClick={onClick} 
     className={`relative flex-1 flex flex-col items-center py-2 px-1 rounded-2xl transition-all duration-200 ${
       active 
         ? isDark 
-          ? 'text-blue-400 bg-blue-500/20' 
-          : 'text-blue-600 bg-blue-100 shadow-sm' 
+          ? '' 
+          : 'shadow-sm' 
         : isDark 
           ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800' 
           : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
     }`}
+    style={active ? {
+      color: accentHex,
+      backgroundColor: isDark ? hexToRgba(accentHex, 0.16) : hexToRgba(accentHex, 0.14)
+    } : undefined}
   >
-    <div className={`p-1.5 rounded-xl transition-all ${active ? isDark ? 'bg-blue-500/30' : 'bg-blue-200' : ''}`}>
+    <div
+      className="p-1.5 rounded-xl transition-all"
+      style={active ? { backgroundColor: isDark ? hexToRgba(accentHex, 0.22) : hexToRgba(accentHex, 0.18) } : undefined}
+    >
       {icon && React.createElement(icon, { size: 22, strokeWidth: active ? 2.5 : 2 })}
     </div>
     <span className={`text-[9px] font-bold mt-0.5 text-center leading-none ${active ? 'opacity-100' : 'opacity-70'}`}>{label}</span>
@@ -3440,7 +3497,7 @@ const defaultData = {
   entries: [], 
   bills: [], 
   salesEvents: [],
-  settings: { limit: 5, theme: 'light', productPassword: '0000', shopName: 'Autonex', pinnedTools: [] },
+  settings: { limit: 5, theme: 'light', accentColor: 'blue', shakeToSearch: true, productPassword: '0000', shopName: 'Autonex', pinnedTools: [] },
   appStatus: 'active'
 };
 
@@ -3468,7 +3525,7 @@ function DukanRegister() {
   
   // 👻 GHOST MIC STATE
   const [isGhostMicOpen, setIsGhostMicOpen] = useState(false);
-  const [shakeEnabled, setShakeEnabled] = useState(true);
+  const shakeEnabled = data.settings?.shakeToSearch !== false;
   
   // 📳 SHAKE SENSOR HOOK - Activates Ghost Mic on shake
   useShakeSensor(() => {
@@ -4064,14 +4121,25 @@ function DukanRegister() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [view]);
 
+  const themeSetting = (data.settings?.theme || 'light') as string;
+  const prefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches
+    : false;
+  const resolvedTheme = themeSetting === 'auto' ? (prefersDark ? 'dark' : 'light') : themeSetting;
+  const themePreset = THEME_PRESETS[resolvedTheme] || (prefersDark ? THEME_PRESETS.dark : THEME_PRESETS.light);
+  const isDark = themePreset.isDark;
+
+  const accentId = (data.settings?.accentColor || 'blue') as string;
+  const accentHex = ACCENT_COLOR_HEX[accentId] || ACCENT_COLOR_HEX.blue;
+
   useEffect(() => {
-    const metaTags = [{ name: "theme-color", content: data.settings.theme === 'dark' ? '#0f172a' : '#ffffff' }];
+    const metaTags = [{ name: "theme-color", content: themePreset.meta }];
     metaTags.forEach(tag => {
         let meta = document.querySelector(`meta[name="${tag.name}"]`) as HTMLMetaElement | null;
         if (!meta) { meta = document.createElement('meta'); meta.name = tag.name; document.head.appendChild(meta); }
         meta.content = tag.content;
     });
-  }, [data.settings.theme]);
+  }, [themePreset.meta]);
 
   useEffect(() => {
     if ("Notification" in window) setNotifPermission(Notification.permission);
@@ -4105,8 +4173,6 @@ function DukanRegister() {
           new Notification(t("Low Stock Warning!"), { body: `${itemCount} ${t("items are below stock limit!")}`, icon: "/icon.png" });
       }
   };
-
-  const isDark = data.settings.theme === 'dark';
 
   const handleSettingsUnlock = () => {
       const currentPass = data.settings.productPassword || '0000';
@@ -4558,7 +4624,12 @@ function DukanRegister() {
               {/* 👻 Ghost Mic Button */}
               <button 
                 onClick={() => setIsGhostMicOpen(true)} 
-                className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'bg-slate-700 border-slate-500 text-blue-400 hover:bg-slate-600' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'}`}
+                className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'hover:bg-slate-600' : 'hover:bg-blue-100'}`}
+                style={{
+                  color: accentHex,
+                  borderColor: hexToRgba(accentHex, 0.35),
+                  backgroundColor: isDark ? hexToRgba(accentHex, 0.12) : hexToRgba(accentHex, 0.08),
+                }}
                 title="Voice Search (or shake phone)"
               >
                 <Mic size={18} />
@@ -4881,7 +4952,7 @@ function DukanRegister() {
     ];
 
     return (
-    <div className={`pb-24 min-h-screen ${isDark ? 'bg-slate-900 text-white' : 'bg-gray-50 text-black'}`}>
+    <div className={`pb-24 min-h-screen ${isDark ? 'text-white' : 'text-black'}`} style={{ backgroundColor: themePreset.bg }}>
        {/* Header */}
        <div className={`sticky top-0 z-40 p-4 backdrop-blur-xl ${isDark ? 'bg-slate-900/90' : 'bg-gray-50/90'}`}>
          <div className="flex justify-between items-center mb-4">
@@ -5066,6 +5137,10 @@ function DukanRegister() {
                  { id: 'autoCategory', icon: Layers, label: t('Auto Categorization'), desc: t('AI groups products'), color: 'text-pink-500', gradient: 'from-pink-500 to-rose-500' },
                  { id: 'voiceAI', icon: Mic, label: t('Voice AI Commands'), desc: t('Hindi/English voice control'), color: 'text-indigo-500', gradient: 'from-indigo-500 to-violet-500' },
                ].map(item => (
+                 (() => {
+                   const defaultOn = item.id === 'voiceAI' || item.id === 'fuzzySearch';
+                   const isEnabled = defaultOn ? data.settings?.[item.id] !== false : !!data.settings?.[item.id];
+                   return (
                  <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
                    <div className="flex items-center gap-3">
                      <div className={`p-2 rounded-lg bg-gradient-to-br ${item.gradient}`}>
@@ -5077,79 +5152,23 @@ function DukanRegister() {
                      </div>
                    </div>
                    <button 
-                     onClick={() => pushToFirebase({...data, settings: {...data.settings, [item.id]: !data.settings?.[item.id]}})}
-                     className={`relative w-11 h-6 rounded-full transition-all duration-300 ${data.settings?.[item.id] ? `bg-gradient-to-r ${item.gradient}` : 'bg-gray-300'}`}
+                       onClick={() => {
+                         const nextEnabled = !isEnabled;
+                         const newData = { ...data, settings: { ...data.settings, [item.id]: nextEnabled } };
+                         setData(newData);
+                         pushToFirebase(newData);
+                       }}
+                       className={`relative w-11 h-6 rounded-full transition-all duration-300 ${isEnabled ? `bg-gradient-to-r ${item.gradient}` : 'bg-gray-300'}`}
                    >
-                     <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
+                       <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${isEnabled ? 'left-5' : 'left-0.5'}`}></div>
                    </button>
                  </div>
+                   );
+                 })()
                ))}
              </div>
            </div>
 
-           {/* Dashboard Widgets */}
-           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-             <div className="flex items-center gap-2 mb-3">
-               <Grid size={18} className="text-cyan-500"/>
-               <span className="font-bold">{t("Dashboard Widgets")}</span>
-             </div>
-             <div className="grid grid-cols-2 gap-2">
-               {[
-                 { id: 'aiInsights', label: '🧠 AI Insights' },
-                 { id: 'salesChart', label: '📈 Sales Chart' },
-                 { id: 'lowStock', label: '⚠️ Low Stock' },
-                 { id: 'topProducts', label: '🏆 Top Products' },
-                 { id: 'recentActivity', label: '📋 Activity' },
-                 { id: 'predictions', label: '🔮 Predictions' },
-               ].map(widget => {
-                 const isEnabled = data.settings?.widgets?.[widget.id] !== false;
-                 return (
-                   <button 
-                     key={widget.id}
-                     onClick={() => pushToFirebase({...data, settings: {...data.settings, widgets: {...(data.settings?.widgets || {}), [widget.id]: !isEnabled}}})}
-                     className={`p-3 rounded-xl border text-left transition-all ${isEnabled 
-                       ? (isDark ? 'bg-blue-900/30 border-blue-500' : 'bg-blue-50 border-blue-300') 
-                       : (isDark ? 'bg-slate-700/50 border-slate-600 opacity-50' : 'bg-gray-50 border-gray-200 opacity-50')}`}
-                   >
-                     <span className="text-sm">{widget.label}</span>
-                     {isEnabled && <CheckCircle size={12} className="text-blue-500 mt-1"/>}
-                   </button>
-                 );
-               })}
-             </div>
-           </div>
-
-           {/* Business Intelligence */}
-           <div className={`p-4 rounded-2xl border ${isDark ? 'bg-gradient-to-br from-slate-800 to-indigo-900/30 border-indigo-500/30' : 'bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200'}`}>
-             <div className="flex items-center gap-2 mb-3">
-               <Activity size={18} className="text-indigo-500"/>
-               <span className="font-bold">{t("Business Intelligence")}</span>
-               <span className="ml-auto px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-[9px] font-bold text-white">PRO</span>
-             </div>
-             <div className="grid grid-cols-2 gap-2">
-               {[
-                 { id: 'salesForecast', icon: Activity, label: t('Sales Forecast'), color: 'from-green-400 to-emerald-500' },
-                 { id: 'profitAnalytics', icon: Percent, label: t('Profit Analytics'), color: 'from-blue-400 to-cyan-500' },
-                 { id: 'customerInsights', icon: User, label: t('Customer Insights'), color: 'from-purple-400 to-pink-500' },
-                 { id: 'inventoryHealth', icon: Package, label: t('Inventory Health'), color: 'from-orange-400 to-red-500' }
-               ].map(feature => {
-                 const isEnabled = data.settings?.biFeatures?.[feature.id];
-                 return (
-                   <button
-                     key={feature.id}
-                     onClick={() => pushToFirebase({...data, settings: {...data.settings, biFeatures: {...(data.settings?.biFeatures || {}), [feature.id]: !isEnabled}}})}
-                     className={`p-3 rounded-xl border text-left transition-all ${isEnabled ? (isDark ? 'bg-slate-700 border-indigo-400' : 'bg-white border-indigo-300') : 'opacity-60'}`}
-                   >
-                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${feature.color} flex items-center justify-center mb-2`}>
-                       <feature.icon size={14} className="text-white" />
-                     </div>
-                     <p className="text-xs font-semibold">{feature.label}</p>
-                     {isEnabled && <div className="flex items-center gap-1 text-green-500 mt-1"><CheckCircle size={10}/><span className="text-[9px]">Active</span></div>}
-                   </button>
-                 );
-               })}
-             </div>
-           </div>
          </div>
        )}
 
@@ -5346,7 +5365,12 @@ function DukanRegister() {
                  </div>
                </div>
                <button 
-                 onClick={() => setShakeEnabled(!shakeEnabled)} 
+                 onClick={() => {
+                   const nextEnabled = !(data.settings?.shakeToSearch !== false);
+                   const newData = { ...data, settings: { ...data.settings, shakeToSearch: nextEnabled } };
+                   setData(newData);
+                   pushToFirebase(newData);
+                 }} 
                  className={`relative w-11 h-6 rounded-full transition-all duration-300 ${shakeEnabled ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-gray-300'}`}
                >
                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${shakeEnabled ? 'left-5' : 'left-0.5'}`}></div>
@@ -5647,7 +5671,7 @@ function DukanRegister() {
 
 
   return (
-    <div className={`min-h-screen font-sans ${isDark ? 'bg-slate-950' : 'bg-white'} ${!isOnline ? 'pt-10' : ''}`}>
+    <div className={`min-h-screen font-sans ${!isOnline ? 'pt-10' : ''}`} style={{ backgroundColor: themePreset.bg }}>
       <audio ref={audioRef} src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
 
       {/* 📡 CONNECTIVITY INDICATORS */}
@@ -5713,12 +5737,12 @@ function DukanRegister() {
       {renderSaveButton()}
 
       <div className={`fixed bottom-0 w-full border-t flex justify-between px-1 py-1.5 pb-safe z-50 backdrop-blur-lg ${isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-gray-200 shadow-lg shadow-gray-200/50'}`}>
-         <NavBtn icon={Book} label={t("Index")} active={view === 'generalIndex'} onClick={() => { setView('generalIndex'); setActivePageId(null); }} isDark={isDark}/>
-         <NavBtn icon={Grid} label={t("Pages")} active={view === 'pagesGrid'} onClick={() => { setView('pagesGrid'); setIndexSearchTerm(''); setActivePageId(null); }} isDark={isDark}/>
-         <NavBtn icon={Search} label={t("Search")} active={view === 'stockSearch'} onClick={() => { setView('stockSearch'); setStockSearchTerm(''); }} isDark={isDark}/>
-         <NavBtn icon={AlertTriangle} label={t("Alerts")} active={view === 'alerts'} onClick={() => setView('alerts')} alert={(data.entries || []).some(e => e.qty < data.settings.limit)} isDark={isDark}/>
+        <NavBtn icon={Book} label={t("Index")} active={view === 'generalIndex'} onClick={() => { setView('generalIndex'); setActivePageId(null); }} isDark={isDark} accentHex={accentHex}/>
+        <NavBtn icon={Grid} label={t("Pages")} active={view === 'pagesGrid'} onClick={() => { setView('pagesGrid'); setIndexSearchTerm(''); setActivePageId(null); }} isDark={isDark} accentHex={accentHex}/>
+        <NavBtn icon={Search} label={t("Search")} active={view === 'stockSearch'} onClick={() => { setView('stockSearch'); setStockSearchTerm(''); }} isDark={isDark} accentHex={accentHex}/>
+        <NavBtn icon={AlertTriangle} label={t("Alerts")} active={view === 'alerts'} onClick={() => setView('alerts')} alert={(data.entries || []).some(e => e.qty < data.settings.limit)} isDark={isDark} accentHex={accentHex}/>
          {/* My Bills nav removed */}
-         <NavBtn icon={Settings} label={t("Settings")} active={view === 'settings'} onClick={() => setView('settings')} isDark={isDark}/>
+        <NavBtn icon={Settings} label={t("Settings")} active={view === 'settings'} onClick={() => setView('settings')} isDark={isDark} accentHex={accentHex}/>
       </div>
 
       {isNewPageOpen && (
