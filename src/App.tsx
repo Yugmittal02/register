@@ -3581,11 +3581,6 @@ function DukanRegister() {
   const [dbLoading, setDbLoading] = useState(false);
   const [fbDocId, setFbDocId] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  
-  //  LOCK SCREEN STATE
-  const [isAppLocked, setIsAppLocked] = useState(false);
-  const [lockPinInput, setLockPinInput] = useState('');
-  const [isBiometricAnimating, setIsBiometricAnimating] = useState(false);
     
   const [view, setView] = useState('generalIndex'); 
   const [activePageId, setActivePageId] = useState(null);
@@ -3805,37 +3800,6 @@ function DukanRegister() {
     return () => unsubDb();
   }, [user]);
 
-  
-  //  AUTO-LOCK: Check if biometric lock is enabled and lock app on mount
-  useEffect(() => {
-    if (!dbLoading && data.settings?.biometricLock) {
-      setIsAppLocked(true);
-    }
-  }, [dbLoading, data.settings?.biometricLock]);
-
-  //  BIOMETRIC UNLOCK HANDLER
-  const handleBiometricUnlock = () => {
-    setIsBiometricAnimating(true);
-    setTimeout(() => {
-      setIsBiometricAnimating(false);
-      setIsAppLocked(false);
-      setLockPinInput('');
-      if (navigator.vibrate) navigator.vibrate(100);
-    }, 1500);
-  };
-
-  //  PIN UNLOCK HANDLER  
-  const handlePinUnlock = () => {
-    const correctPin = data.settings?.productPassword || '0000';
-    if (lockPinInput === correctPin) {
-      setIsAppLocked(false);
-      setLockPinInput('');
-      if (navigator.vibrate) navigator.vibrate(100);
-    } else {
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-      setLockPinInput('');
-    }
-  };
   const handleAuth = async (e) => {
     e.preventDefault();
     if(!email || !password) { showToast("Please fill details", "error"); return; }
@@ -4756,9 +4720,6 @@ function DukanRegister() {
         </div>
       </div>
 
-      {/* ?? QUICK STATS WIDGET */}
-      <QuickStats data={data} />
-
       {/* ?? AI INSIGHTS WIDGET - REMOVED 
          {(data.settings?.widgets?.aiInsights !== false) && (
            <AIInsightsWidget data={data} t={t} isDark={isDark} />
@@ -5507,26 +5468,6 @@ function DukanRegister() {
 
              {/* Security Features */}
              <div className="space-y-2">
-               {[
-                 { id: 'biometricLock', icon: Lock, label: t('Biometric Lock'), desc: t('Face ID / Fingerprint'), color: 'text-red-500' },
-               ].map(item => (
-                 <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
-                   <div className="flex items-center gap-3">
-                     <item.icon size={18} className={item.color} />
-                     <div>
-                       <p className="text-sm font-semibold">{item.label}</p>
-                       <p className="text-[10px] opacity-50">{item.desc}</p>
-                     </div>
-                   </div>
-                   <button 
-                     onClick={() => pushToFirebase({...data, settings: {...data.settings, [item.id]: !data.settings?.[item.id]}})}
-                     className={`relative w-10 h-5 rounded-full transition-all duration-300 ${data.settings?.[item.id] ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-300'}`}
-                   >
-                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 ${data.settings?.[item.id] ? 'left-5' : 'left-0.5'}`}></div>
-                   </button>
-                 </div>
-               ))}
-
                {/* Auto Lock Timer */}
                <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
                  <div className="flex items-center gap-3">
@@ -5762,67 +5703,6 @@ function DukanRegister() {
   };
 
 
-
-  // LOCK SCREEN - Show when biometric lock is enabled
-  if (isAppLocked && data.settings?.biometricLock) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-6 relative overflow-hidden">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-600 rounded-full blur-[120px] opacity-20"></div>
-        <div className="absolute bottom-20 right-10 w-72 h-72 bg-purple-600 rounded-full blur-[120px] opacity-20"></div>
-
-        <div className="relative z-10 flex flex-col items-center gap-8">
-          <div className="relative">
-            <div className={`absolute inset-0 bg-blue-500 blur-3xl opacity-30 ${isBiometricAnimating ? 'animate-pulse' : ''}`}></div>
-            <div className={`relative bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-3xl shadow-2xl border border-slate-700 ${isBiometricAnimating ? 'scale-105' : ''} transition-transform duration-300`}>
-              <Lock size={48} className={`text-blue-400 ${isBiometricAnimating ? 'animate-pulse' : ''}`} />
-            </div>
-          </div>
-
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">{t("App Locked")}</h1>
-            <p className="text-slate-400 text-sm">{data.settings.shopName || 'Autonex'}</p>
-          </div>
-
-          <button onClick={handleBiometricUnlock} disabled={isBiometricAnimating} className={`relative group ${isBiometricAnimating ? 'cursor-not-allowed' : ''}`}>
-            <div className={`absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur-lg opacity-50 group-hover:opacity-75 transition-opacity ${isBiometricAnimating ? 'animate-ping' : ''}`}></div>
-            <div className={`relative w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center shadow-lg ${isBiometricAnimating ? '' : 'group-hover:scale-105'} transition-transform`}>
-              {isBiometricAnimating ? (
-                <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 1C8.13 1 5 4.13 5 8v4c0 3.87 3.13 7 7 7s7-3.13 7-7V8c0-3.87-3.13-7-7-7z" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 4c-2.21 0-4 1.79-4 4v4c0 2.21 1.79 4 4 4s4-1.79 4-4V8c0-2.21-1.79-4-4-4z" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M12 7v6" strokeLinecap="round"/>
-                  <path d="M9 10v2" strokeLinecap="round"/>
-                  <path d="M15 10v2" strokeLinecap="round"/>
-                </svg>
-              )}
-            </div>
-          </button>
-          <p className="text-slate-500 text-xs">{isBiometricAnimating ? t("Authenticating...") : t("Tap to unlock with fingerprint")}</p>
-
-          <div className="mt-8 w-full max-w-xs">
-            <p className="text-center text-slate-400 text-sm mb-3">{t("Or enter PIN")}</p>
-            <div className="flex gap-2 mb-4">
-              <input
-                type="password"
-                maxLength={4}
-                placeholder=""
-                value={lockPinInput}
-                onChange={e => setLockPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                className="flex-1 text-center text-2xl tracking-[0.5em] bg-slate-800 border border-slate-700 rounded-xl p-3 focus:border-blue-500 focus:outline-none transition-colors"
-              />
-            </div>
-            <button onClick={handlePinUnlock} disabled={lockPinInput.length < 4} className={`w-full py-3 rounded-xl font-bold transition-all ${lockPinInput.length === 4 ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-slate-700 text-slate-400'}`}>{t("Unlock")}</button>
-          </div>
-
-          <div className="mt-4 flex items-center gap-2 text-green-400 bg-green-500/10 px-4 py-2 rounded-full">
-            <ShieldCheck size={16} /><span className="text-xs font-semibold">{t("Secured by Autonex")}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-screen font-sans ${!isOnline ? 'pt-10' : ''}`} style={{ backgroundColor: themePreset.bg }}>
@@ -6154,4 +6034,3 @@ export default function App() {
         </ErrorBoundary>
     );
     }
-
