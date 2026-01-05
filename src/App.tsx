@@ -476,6 +476,23 @@ try {
 // ---------------------------------------------------------
 const translationCache = new Map(); 
 
+const looksCorruptedTranslation = (value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  const s = String(value);
+  if (!s) return false;
+  if (s.includes('\uFFFD')) return true;
+  const qCount = (s.match(/\?/g) || []).length;
+  // If a meaningful chunk of the string is '?', it's almost certainly an encoding/placeholder issue.
+  return qCount >= 2 && qCount / Math.max(1, s.length) > 0.12;
+};
+
+const sanitizeDisplayText = (value: unknown, fallback: string = ''): string => {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (!s) return '';
+  if (looksCorruptedTranslation(s)) return fallback;
+  return s;
+};
+
 // API Translation using MyMemory (Free, No API key needed)
 const translateWithAPI = async (text: string, from: string = 'en', to: string = 'hi'): Promise<string> => {
   if (!text || text.trim() === '') return '';
@@ -491,13 +508,18 @@ const translateWithAPI = async (text: string, from: string = 'en', to: string = 
     
     if (data.responseStatus === 200 && data.responseData?.translatedText) {
       const translated = data.responseData.translatedText;
-      translationCache.set(cacheKey, translated);
-      return translated;
+      if (!looksCorruptedTranslation(translated)) {
+        translationCache.set(cacheKey, translated);
+        return translated;
+      }
+      return text;
     }
     throw new Error('API failed');
   } catch (error) {
     console.warn('Translation API failed, using fallback:', error);
-    return convertToHindiFallback(text);
+    // Offline fallback was getting saved/rendered as '????' on some machines due to encoding.
+    // Prefer original text over corrupted output.
+    return text;
   }
 };
 
@@ -524,13 +546,16 @@ const transliterateWithGoogle = async (text: string): Promise<string> => {
         result += wordData[1][0] + " "; // Pick the first (best) suggestion
       });
       const finalResult = result.trim();
-      translationCache.set(cacheKey, finalResult);
-      return finalResult;
+      if (!looksCorruptedTranslation(finalResult)) {
+        translationCache.set(cacheKey, finalResult);
+        return finalResult;
+      }
+      return text;
     }
     return text; // Fail hone par original text return kare
   } catch (error) {
     console.error("Transliteration Error:", error);
-    return convertToHindiFallback(text); // Offline fallback use kare
+    return text;
   }
 };
 
@@ -636,6 +661,8 @@ const convertToHindiFallback = (text) => {
       return hindiWord || word;
     }).join(' ');
 
+    // Never return/cache corrupted placeholder output (e.g. '????')
+    if (looksCorruptedTranslation(translated)) return strText;
     translationCache.set(fallbackCacheKey, translated);
     return translated;
   } catch (err) {
@@ -693,7 +720,7 @@ const performSmartSearch = (rawTranscript, inventory, pages, options: { useFuzzy
         }
     });
 
-    console.log(`?? Original: "${rawTranscript}" -> AI Processed: "${processedText}"`);
+    console.log(`Original: "${rawTranscript}" -> Processed: "${processedText}"`);
 
     // Step B: Keyword Extraction (Remove filler words)
     const fillerWords = /\b(check|search|find|dhundo|dekho|batao|kya|hai|available|stock|mein|ka|ki|ke|se|aur|or|the|is|a|an|for|in|of)\b/gi;
@@ -1298,7 +1325,7 @@ const DeadStockAlert = ({ data, onNavigate }) => {
                                     <p className="font-bold text-gray-800">{item.car}</p>
                                     <div className="flex gap-2 mt-1">
                                         <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                            ?? {page?.itemName || 'Unknown'}
+                                            {page?.itemName || 'Unknown'}
                                         </span>
                                         <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
                                             {daysSinceUpdate} days old
@@ -1382,7 +1409,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
             if (abc.A.length > 0) {
                 results.push({
                     type: 'abc',
-                    icon: '??',
                     title: 'High-Value Items',
                     message: `${abc.A.length} items make up 70% of your inventory value. Focus on these!`,
                     priority: 1,
@@ -1397,7 +1423,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
             const urgentItems = lowStockItems.filter(e => e.qty <= 2);
             results.push({
                 type: 'reorder',
-                icon: '??',
                 title: 'Reorder Alert',
                 message: urgentItems.length > 0 
                     ? `${urgentItems.length} items critically low! Reorder immediately.`
@@ -1414,7 +1439,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
         if (overstocked.length > 0) {
             results.push({
                 type: 'overstock',
-                icon: '??',
                 title: 'Overstock Detected',
                 message: `${overstocked.length} items have excessive stock. Consider promotions.`,
                 priority: 3,
@@ -1428,7 +1452,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
         if (deadStock.length > 0) {
             results.push({
                 type: 'dead',
-                icon: '??',
                 title: 'Dead Stock Alert',
                 message: `${deadStock.length} items haven't moved in 30+ days.`,
                 priority: 2,
@@ -1441,7 +1464,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
         const healthScore = Math.round(((entries.length - outOfStock - lowStockItems.length) / (entries.length || 1)) * 100);
         results.push({
             type: 'health',
-            icon: healthScore >= 80 ? '??' : healthScore >= 50 ? '??' : '??',
             title: 'Inventory Health',
             message: `Score: ${healthScore}% - ${healthScore >= 80 ? 'Excellent!' : healthScore >= 50 ? 'Needs attention' : 'Critical!'}`,
             priority: healthScore < 50 ? 1 : 4,
@@ -1454,7 +1476,6 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
             if (avgItemsPerPage < 3) {
                 results.push({
                     type: 'organize',
-                    icon: '??',
                     title: 'Organization Tip',
                     message: 'Consider consolidating pages. Many have few items.',
                     priority: 5,
@@ -1494,7 +1515,7 @@ const AIInsightsWidget = ({ data, t, isDark }) => {
                         key={idx}
                         className={`p-3 rounded-xl bg-gradient-to-r ${colorClasses[insight.color]} border flex items-start gap-3 transition-all hover:scale-[1.01]`}
                     >
-                        <span className="text-xl">{insight.icon}</span>
+                        {/* icon removed to avoid rendering corrupted placeholder glyphs */}
                         <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-sm text-gray-800">{insight.title}</h4>
                             <p className="text-xs text-gray-600 line-clamp-2">{insight.message}</p>
@@ -1600,7 +1621,6 @@ const SalesPredictionWidget = ({ data, t, isDark }) => {
                         prediction.trend === 'down' ? 'bg-red-100 text-red-700' :
                         'bg-gray-100 text-gray-700'
                     }`}>
-                        {prediction.trend === 'up' ? '??' : prediction.trend === 'down' ? '??' : '??'} 
                         {prediction.trendPercent}%
                     </span>
                 </div>
@@ -2305,7 +2325,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleTranslate()}
                   />
                   <div className="absolute bottom-3 right-3 flex gap-2">
-                    <VoiceInput onResult={setTransInput} isDark={isDark} />
+                    <VoiceInput onResult={setTransInput} isDark={isDark} lang={transLang.from === 'hi' ? 'hi-IN' : 'en-IN'} />
                     <button 
                       onClick={() => setTransInput('')}
                       className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
@@ -2446,7 +2466,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
                    onClick={() => r !== 'custom' && setGstInput({...gstInput, rate: r})} 
                    className={`py-3 rounded-xl font-bold border-2 transition-all ${gstInput.rate === r ? 'bg-blue-600 text-white border-blue-600 scale-105' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}
                  >
-                   {r === 'custom' ? '??' : `${r}%`}
+                   {r === 'custom' ? t('Custom') : `${r}%`}
                  </button>
                ))}
              </div>
@@ -3416,17 +3436,43 @@ const EntryRow = React.memo(({ entry, t, isDark, onUpdateBuffer, onEdit, limit, 
     );
 });
 
-const VoiceInput = ({ onResult, isDark }) => {
+const VoiceInput = ({ onResult, isDark, lang = 'en-IN' }) => {
   const [isListening, setIsListening] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const audioStreamRef = useRef(null);
+
+  const stopAudioStream = useCallback(() => {
+    const stream: any = audioStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      audioStreamRef.current = null;
+    }
+  }, []);
   
-  const startListening = () => {
+  const startListening = async () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.lang = 'en-IN';
+      recognition.lang = lang;
       recognition.continuous = false;
       recognition.interimResults = false;
+
+      // Best-effort: ask for audio with built-in noise suppression.
+      // SpeechRecognition doesn't expose constraints directly, but this can improve capture on some devices.
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          audioStreamRef.current = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            } as any
+          });
+        }
+      } catch (err) {
+        // Ignore: SpeechRecognition may still work without this.
+        console.warn('getUserMedia constraints failed:', err);
+      }
       
       recognition.onstart = () => {
         setIsListening(true);
@@ -3447,12 +3493,14 @@ const VoiceInput = ({ onResult, isDark }) => {
         onResult(processed);
         setIsListening(false);
         if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        stopAudioStream();
       };
       
       recognition.onerror = (e) => {
         console.warn('Speech recognition error:', e.error);
         setIsListening(false);
         setHasError(true);
+        stopAudioStream();
         
         // Handle specific errors
         if (e.error === 'network') {
@@ -3469,6 +3517,7 @@ const VoiceInput = ({ onResult, isDark }) => {
       
       recognition.onend = () => {
         setIsListening(false);
+        stopAudioStream();
       };
       
       try { 
@@ -3476,6 +3525,7 @@ const VoiceInput = ({ onResult, isDark }) => {
       } catch (e) { 
         console.error('Failed to start voice recognition:', e); 
         setHasError(true);
+        stopAudioStream();
         setTimeout(() => setHasError(false), 2000);
       }
     } else { 
@@ -3672,8 +3722,10 @@ function DukanRegister() {
   const audioRef = useRef(null);
 
   const t = useCallback((text) => {
-    if (!isHindi) return text;
-    return convertToHindiFallback(text);
+    const original = sanitizeDisplayText(text, '');
+    if (!isHindi) return original;
+    const translated = convertToHindiFallback(original);
+    return sanitizeDisplayText(translated, original);
   }, [isHindi]);
 
   // Keep a ref to `data` so snapshot handler can merge transient local state without triggering
@@ -3696,7 +3748,7 @@ function DukanRegister() {
       // Rebuild Trie for fast autocomplete - O(n*m) where n=items, m=avg name length
       SmartSearchEngine.initialized = false;
       SmartSearchEngine.initialize(data.entries);
-      console.log('?? Smart Search Engine initialized with', data.entries.length, 'items');
+      console.log('Smart Search Engine initialized with', data.entries.length, 'items');
     }
   }, [data.entries]);
 
@@ -4716,7 +4768,7 @@ function DukanRegister() {
                 <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-slate-400' : 'text-amber-400'}`} size={18}/>
                 {indexSearchTerm && <button onClick={() => setIndexSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"><X size={16}/></button>}
             </div>
-            <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} />
+            <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} lang={isHindi ? 'hi-IN' : 'en-IN'} />
         </div>
       </div>
 
@@ -4799,7 +4851,7 @@ function DukanRegister() {
                 <input className={`w-full pl-9 p-3 rounded-xl border outline-none shadow-sm ${isDark ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-black'}`} placeholder={t("Find Page...")} value={indexSearchTerm} onChange={e => setIndexSearchTerm(e.target.value)}/>
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
             </div>
-            <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} />
+            <VoiceInput onResult={setIndexSearchTerm} isDark={isDark} lang={isHindi ? 'hi-IN' : 'en-IN'} />
         </div>
         
         <div className="flex flex-col gap-3">
@@ -4841,7 +4893,7 @@ function DukanRegister() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20}/>
                         {stockSearchTerm && <button onClick={() => setStockSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X size={16}/></button>}
                     </div>
-                    <VoiceInput onResult={setStockSearchTerm} isDark={isDark} />
+                    <VoiceInput onResult={setStockSearchTerm} isDark={isDark} lang={isHindi ? 'hi-IN' : 'en-IN'} />
                 </div>
             </div>
             <div className="space-y-3">
@@ -4918,7 +4970,7 @@ function DukanRegister() {
                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                  <input className={`w-full pl-8 py-2 rounded border outline-none ${isDark ? 'bg-slate-900 border-slate-600' : 'bg-gray-50 border-gray-300'}`} placeholder={t("Search Item...")} value={pageSearchTerm} onChange={e => setPageSearchTerm(e.target.value)}/>
               </div>
-              <VoiceInput onResult={setPageSearchTerm} isDark={isDark}/>
+              <VoiceInput onResult={setPageSearchTerm} isDark={isDark} lang={isHindi ? 'hi-IN' : 'en-IN'} />
            </div>
            <div className={`flex p-2 text-xs font-bold uppercase ${isDark ? 'bg-slate-700' : 'bg-red-100 text-red-900'}`}>
              <div className="w-6 pl-1">#</div>
@@ -5000,14 +5052,14 @@ function DukanRegister() {
     ];
 
     const themeOptions = [
-      { id: 'light', name: t('Light'), colors: ['#ffffff', '#f1f5f9', '#3b82f6'], icon: '??' },
-      { id: 'dark', name: t('Dark'), colors: ['#0f172a', '#1e293b', '#3b82f6'], icon: '??' },
-      { id: 'blue', name: t('Ocean Blue'), colors: ['#1e3a5f', '#2563eb', '#60a5fa'], icon: '??' },
-      { id: 'green', name: t('Forest'), colors: ['#14532d', '#22c55e', '#86efac'], icon: '??' },
-      { id: 'purple', name: t('Royal'), colors: ['#4c1d95', '#8b5cf6', '#c4b5fd'], icon: '??' },
-      { id: 'orange', name: t('Sunset'), colors: ['#7c2d12', '#f97316', '#fed7aa'], icon: '??' },
-      { id: 'rose', name: t('Rose'), colors: ['#4c0519', '#f43f5e', '#fda4af'], icon: '??' },
-      { id: 'auto', name: t('Auto'), colors: ['#1e293b', '#ffffff', '#8b5cf6'], icon: '??' },
+      { id: 'light', name: t('Light'), colors: ['#ffffff', '#f1f5f9', '#3b82f6'] },
+      { id: 'dark', name: t('Dark'), colors: ['#0f172a', '#1e293b', '#3b82f6'] },
+      { id: 'blue', name: t('Ocean Blue'), colors: ['#1e3a5f', '#2563eb', '#60a5fa'] },
+      { id: 'green', name: t('Forest'), colors: ['#14532d', '#22c55e', '#86efac'] },
+      { id: 'purple', name: t('Royal'), colors: ['#4c1d95', '#8b5cf6', '#c4b5fd'] },
+      { id: 'orange', name: t('Sunset'), colors: ['#7c2d12', '#f97316', '#fed7aa'] },
+      { id: 'rose', name: t('Rose'), colors: ['#4c0519', '#f43f5e', '#fda4af'] },
+      { id: 'auto', name: t('Auto'), colors: ['#1e293b', '#ffffff', '#8b5cf6'] },
     ];
 
     const accentColors = [
@@ -5164,12 +5216,11 @@ function DukanRegister() {
              </div>
              <div className="grid grid-cols-3 gap-2 mb-3">
                {[
-                 { icon: '??', label: t('Days'), value: '30+' },
-                 { icon: '??', label: t('Products'), value: (data.entries?.length || 0).toString() },
-                 { icon: '??', label: t('Bills'), value: (data.bills?.length || 0).toString() },
+                 { label: t('Days'), value: '30+' },
+                 { label: t('Products'), value: (data.entries?.length || 0).toString() },
+                 { label: t('Bills'), value: (data.bills?.length || 0).toString() },
                ].map((stat, i) => (
                  <div key={i} className={`p-2 rounded-xl text-center ${isDark ? 'bg-slate-700/50' : 'bg-white/80'}`}>
-                   <span className="text-xl">{stat.icon}</span>
                    <p className="text-lg font-bold">{stat.value}</p>
                    <p className="text-[9px] opacity-60">{stat.label}</p>
                  </div>
@@ -5178,7 +5229,7 @@ function DukanRegister() {
              <div className={`p-2 rounded-xl ${isDark ? 'bg-slate-700/50' : 'bg-yellow-100/50'}`}>
                <div className="flex items-center justify-between text-xs mb-1">
                  <span>{t("Level")}</span>
-                 <span className="font-bold">{(data.entries?.length || 0) > 100 ? '?? Gold' : (data.entries?.length || 0) > 50 ? '?? Silver' : '?? Bronze'}</span>
+                 <span className="font-bold">{(data.entries?.length || 0) > 100 ? t('Gold') : (data.entries?.length || 0) > 50 ? t('Silver') : t('Bronze')}</span>
                </div>
                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                  <div className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full" style={{ width: `${Math.min(100, ((data.entries?.length || 0) / 100) * 100)}%` }}></div>
@@ -5299,7 +5350,6 @@ function DukanRegister() {
                        <div key={i} className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
                      ))}
                    </div>
-                   <span className="text-xl block text-center mb-1">{theme.icon}</span>
                    <p className="text-[10px] font-semibold text-center">{theme.name}</p>
                    {(data.settings?.theme || 'light') === theme.id && <CheckCircle size={12} className="text-blue-500 mx-auto mt-1"/>}
                  </button>
@@ -5319,7 +5369,7 @@ function DukanRegister() {
                    key={size}
                    onClick={() => pushToFirebase({...data, settings: {...data.settings, fontSize: size}})}
                    className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${(data.settings?.fontSize || 'Medium') === size
-                     ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg' 
+                     ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
                      : isDark ? 'bg-slate-700' : 'bg-gray-100'}`}
                  >
                    {t(size)}
@@ -5790,7 +5840,7 @@ function DukanRegister() {
             </div>
             <div className="flex gap-2 mb-5">
                 <input autoFocus className="flex-1 border-2 border-gray-200 focus:border-yellow-500 rounded-xl p-3.5 text-lg font-semibold text-black outline-none transition-colors" placeholder={t("Item Name")} value={input.itemName} onChange={e => setInput({...input, itemName: e.target.value})} />
-                <VoiceInput onResult={(txt) => setInput(prev => ({...prev, itemName: txt}))} isDark={false} />
+                <VoiceInput onResult={(txt) => setInput(prev => ({...prev, itemName: txt}))} isDark={false} lang={isHindi ? 'hi-IN' : 'en-IN'} />
             </div>
             <div className="flex gap-3">
                <button onClick={() => setIsNewPageOpen(false)} className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 transition-colors">{t("Cancel")}</button>
@@ -6008,7 +6058,7 @@ function DukanRegister() {
                      <input autoFocus className="w-full border-2 border-black rounded p-3 text-lg font-bold text-black" placeholder={t("Car (e.g. Swift & Alto)")} value={input.carName} onChange={e => setInput({...input, carName: e.target.value})} />
                      <p className="text-[10px] text-gray-500 mt-1">{t("Tip: Use 'Swift & Alto' for shared items.")}</p>
                  </div>
-                 <VoiceInput onResult={(txt) => setInput(prev => ({...prev, carName: txt}))} isDark={false} />
+                 <VoiceInput onResult={(txt) => setInput(prev => ({...prev, carName: txt}))} isDark={false} lang={isHindi ? 'hi-IN' : 'en-IN'} />
               </div>
               {input.carName && (() => {
                   const existing = (data.entries || []).filter(e => activePage && e.pageId === activePage.id && e.car.toLowerCase().includes(input.carName.toLowerCase())).reduce((a,b) => a+b.qty, 0);
@@ -6034,3 +6084,4 @@ export default function App() {
         </ErrorBoundary>
     );
     }
+
