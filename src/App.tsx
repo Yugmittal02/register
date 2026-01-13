@@ -493,11 +493,45 @@ const sanitizeDisplayText = (value: unknown, fallback: string = ''): string => {
   return s;
 };
 
-// API Translation using MyMemory (Free, No API key needed)
-const translateWithAPI = async (text: string, from: string = 'en', to: string = 'hi'): Promise<string> => {
+// ?? GOOGLE TRANSLATE API (Free unofficial endpoint - reliable)
+const translateWithGoogle = async (text: string, from: string = 'en', to: string = 'hi'): Promise<string> => {
   if (!text || text.trim() === '') return '';
 
-  const cacheKey = `${from}:${to}:${text}`;
+  const cacheKey = `gtrans:${from}:${to}:${text}`;
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
+  try {
+    // Google Translate free endpoint (used by many apps)
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data && data[0]) {
+      // Response format: [[["translated text","original text",null,null,1]],null,"en"]
+      let translated = '';
+      data[0].forEach((item: any) => {
+        if (item[0]) translated += item[0];
+      });
+
+      if (translated && !looksCorruptedTranslation(translated)) {
+        translationCache.set(cacheKey, translated);
+        return translated;
+      }
+    }
+    throw new Error('Google Translate failed');
+  } catch (error) {
+    console.warn('Google Translate failed, trying MyMemory:', error);
+    // Fallback to MyMemory API
+    return translateWithMyMemory(text, from, to);
+  }
+};
+
+// Fallback: MyMemory Translation API
+const translateWithMyMemory = async (text: string, from: string = 'en', to: string = 'hi'): Promise<string> => {
+  if (!text || text.trim() === '') return '';
+
+  const cacheKey = `mymem:${from}:${to}:${text}`;
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
 
   try {
@@ -512,13 +546,10 @@ const translateWithAPI = async (text: string, from: string = 'en', to: string = 
         translationCache.set(cacheKey, translated);
         return translated;
       }
-      return text;
     }
-    throw new Error('API failed');
+    return text;
   } catch (error) {
-    console.warn('Translation API failed, using fallback:', error);
-    // Offline fallback was getting saved/rendered as '????' on some machines due to encoding.
-    // Prefer original text over corrupted output.
+    console.warn('MyMemory also failed:', error);
     return text;
   }
 };
@@ -1756,7 +1787,7 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
     { code: 'ar', name: 'Arabic' },
   ];
 
-  // ?? API TRANSLATION / TRANSLITERATION HANDLER
+  // ?? GOOGLE TRANSLATE HANDLER - Uses actual translation
   const handleTranslate = async () => {
     if (!transInput.trim()) return;
     setTransLoading(true);
@@ -1764,20 +1795,29 @@ const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onToggle
     try {
       let result = '';
 
-      // ??? Target Language ????? ??, ?? ?? Transliteration (???) ??????
-      // For Hindi output, use Google Transliteration for phonetic conversion
-      if (transLang.to === 'hi') {
-        // ? Google Transliteration for Hinglish typing (Cat -> ???)
-        result = await transliterateWithGoogle(transInput);
-      } else {
-        // ???? ?????? ?? ??? ?????? Translation ?? ??? ??
-        result = await translateWithAPI(transInput, transLang.from, transLang.to);
-      }
+      // Always use Google Translate for actual meaning translation
+      result = await translateWithGoogle(transInput, transLang.from, transLang.to);
 
       setTransOutput(result);
       setTransHistory(prev => [{ input: transInput, output: result, from: transLang.from, to: transLang.to }, ...prev.slice(0, 9)]);
     } catch (e) {
       setTransOutput('Translation failed. Please try again.');
+    }
+    setTransLoading(false);
+  };
+
+  // ?? TRANSLITERATION HANDLER - For phonetic conversion (English sounds to Hindi script)
+  const handleTransliterate = async () => {
+    if (!transInput.trim()) return;
+    setTransLoading(true);
+
+    try {
+      // Google Transliteration for Hinglish typing (Cat -> कैट)
+      const result = await transliterateWithGoogle(transInput);
+      setTransOutput(result);
+      setTransHistory(prev => [{ input: transInput, output: result, from: 'en', to: 'hi-translit' }, ...prev.slice(0, 9)]);
+    } catch (e) {
+      setTransOutput('Transliteration failed. Please try again.');
     }
     setTransLoading(false);
   };
@@ -4848,13 +4888,16 @@ function DukanRegister() {
       {data.settings.pinnedTools && data.settings.pinnedTools.length > 0 && (
         <div className={`py-3 px-4 border-b overflow-x-auto whitespace-nowrap flex gap-3 hide-scrollbar ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
           {[
-            { id: 'notes', icon: <StickyNote size={18} />, label: 'Notes', col: 'text-yellow-600 bg-yellow-100' },
+            { id: 'basicCalc', icon: <Calculator size={18} />, label: 'Calc', col: 'text-teal-600 bg-teal-100' },
+            { id: 'invoice', icon: <FileText size={18} />, label: 'Bill', col: 'text-indigo-600 bg-indigo-100' },
             { id: 'gst', icon: <Percent size={18} />, label: 'GST', col: 'text-blue-600 bg-blue-100' },
             { id: 'margin', icon: <Calculator size={18} />, label: 'Profit', col: 'text-purple-600 bg-purple-100' },
-            { id: 'card', icon: <CreditCard size={18} />, label: 'Card', col: 'text-orange-600 bg-orange-100' },
+            { id: 'emi', icon: <DollarSign size={18} />, label: 'EMI', col: 'text-emerald-600 bg-emerald-100' },
             { id: 'converter', icon: <RefreshCcw size={18} />, label: 'Convert', col: 'text-green-600 bg-green-100' },
+            { id: 'stockvalue', icon: <Activity size={18} />, label: 'Stock', col: 'text-cyan-600 bg-cyan-100' },
+            { id: 'card', icon: <CreditCard size={18} />, label: 'Card', col: 'text-orange-600 bg-orange-100' },
+            { id: 'notes', icon: <StickyNote size={18} />, label: 'Notes', col: 'text-yellow-600 bg-yellow-100' },
             { id: 'translator', icon: <Languages size={18} />, label: 'Trans', col: 'text-pink-600 bg-pink-100' },
-            { id: 'invoice', icon: <FileText size={18} />, label: 'Bill', col: 'text-indigo-600 bg-indigo-100' },
           ].filter(t => data.settings.pinnedTools.includes(t.id)).map(tool => (
             <button key={tool.id} onClick={() => { setActiveToolId(tool.id); setView('tools'); }} className={`inline-flex items-center gap-2 px-3 py-2 rounded-full font-bold text-sm shadow-sm border ${tool.col} border-transparent hover:scale-105 transition-transform`}>
               {tool.icon} {tool.label}
