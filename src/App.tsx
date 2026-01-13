@@ -30,6 +30,8 @@ import { translateWithGoogle, translateWithMyMemory, transliterateWithGoogle, co
 import { performSmartSearch } from './lib/search';
 import { exactDictionary, synonymMap, soundMap } from './data/dictionaries';
 import { ToolsHub } from './components/ToolsHub';
+import { ItemsPage } from './components/ItemsPage';
+import { TranslateBtn } from './components/TranslateBtn';
 
 interface SearchResult {
   match: boolean;
@@ -2276,11 +2278,6 @@ function DukanRegister() {
 
   // --------------------------------------------------------------------------
 
-  const TranslateBtn = () => (
-    <button onClick={() => setIsHindi(!isHindi)} className={`p-2.5 rounded-xl border transition-all hover:scale-105 ${isDark ? 'bg-slate-700 border-slate-500 hover:bg-slate-600' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
-      <Languages size={18} className={isHindi ? 'text-orange-500' : ''} />
-    </button>
-  );
 
   const renderSaveButton = () => {
     const count = Object.keys(tempChanges).length;
@@ -2418,7 +2415,7 @@ function DukanRegister() {
               {isOnline ? <Wifi size={12} /> : <WifiOff size={12} className="animate-pulse" />}
               <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
             </div>
-            <TranslateBtn />
+            <TranslateBtn isHindi={isHindi} setIsHindi={setIsHindi} isDark={isDark} />
           </div>
         </div>
         <div className="flex gap-2 mt-2">
@@ -2506,7 +2503,7 @@ function DukanRegister() {
     <div className={`pb-24 min-h-screen p-4 ${isDark ? 'bg-slate-950' : 'bg-gray-100'}`}>
       <div className="mb-4 sticky top-0 z-10 pt-2 pb-2 backdrop-blur-sm flex justify-between items-center">
         <h1 className={`text-2xl font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-800'}`}><Grid /> {t("All Pages")}</h1>
-        <TranslateBtn />
+        <TranslateBtn isHindi={isHindi} setIsHindi={setIsHindi} isDark={isDark} />
       </div>
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
@@ -2595,89 +2592,10 @@ function DukanRegister() {
     );
   };
 
-  const renderPage = () => {
-    if (!activePage) return <div className={`min-h-screen flex items-center justify-center ${isDark ? 'text-white' : 'text-black'}`}>Page not found or Loading...</div>;
-
-    const { filteredEntries, grandTotal } = pageViewData;
-    const currentPageIndex = data.pages.findIndex(p => p.id === activePageId);
-    const prevPage = currentPageIndex > 0 ? data.pages[currentPageIndex - 1] : null;
-    const nextPage = currentPageIndex < data.pages.length - 1 ? data.pages[currentPageIndex + 1] : null;
-
-    // Show ALL results when searching, otherwise limit for performance
-    const visibleEntries = pageSearchTerm ? filteredEntries : filteredEntries.slice(0, displayLimit);
-
-    return (
-      <div className={`pb-24 min-h-screen ${isDark ? 'bg-slate-950 text-white' : 'bg-white text-black'}`}>
-        <div className={`sticky top-0 z-10 border-b-2 shadow-sm ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-red-200'}`}>
-          <div className={`flex items-center p-3 ${isDark ? 'bg-slate-800' : 'bg-red-50'}`}>
-            <button onClick={() => { setView('generalIndex'); setActivePageId(null); }} className="mr-2 p-2"><ArrowLeft /></button>
-            <div className="flex-1">
-              <div className="flex justify-between items-center">
-                <p className={`text-xs font-bold uppercase ${isDark ? 'text-slate-400' : 'text-red-400'}`}>{t("Page No")}: {activePage.pageNo}</p>
-
-                <div className="flex gap-4 items-center bg-white/10 p-1 rounded-full">
-                  <button onClick={() => setActivePageId(prevPage.id)} disabled={!prevPage} className="h-12 w-12 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg disabled:opacity-30 disabled:bg-gray-400 active:scale-95 transition-transform"><ArrowLeftIcon size={28} /></button>
-                  <button onClick={() => setActivePageId(nextPage.id)} disabled={!nextPage} className="h-12 w-12 flex items-center justify-center bg-blue-600 text-white rounded-full shadow-lg disabled:opacity-30 disabled:bg-gray-400 active:scale-95 transition-transform"><ArrowRight size={28} /></button>
-                </div>
-
-                <div className="flex gap-2 ml-2">
-                  <button onClick={() => setIsCopyModalOpen(true)} className={`p-2 rounded-full border ${isDark ? 'bg-slate-700 text-yellow-400 border-slate-500' : 'bg-yellow-100 text-yellow-700 border-yellow-400'}`}><Copy size={20} /></button>
-                  <TranslateBtn />
-                </div>
-              </div>
-              <h2 className="text-2xl font-black uppercase mt-1">{t(activePage.itemName)}</h2>
-              <div className="text-xs font-bold opacity-70 mt-1">{t("Total")} {t("Items")}: {grandTotal}</div>
-            </div>
-          </div>
-          <div className={`p-2 flex gap-2 border-t ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input className={`w-full pl-8 py-2 rounded border outline-none ${isDark ? 'bg-slate-900 border-slate-600' : 'bg-gray-50 border-gray-300'}`} placeholder={t("Search Item...")} value={pageSearchTerm} onChange={e => setPageSearchTerm(e.target.value)} />
-            </div>
-            <VoiceInput onResult={setPageSearchTerm} isDark={isDark} lang={isHindi ? 'hi-IN' : 'en-IN'} />
-          </div>
-          <div className={`flex p-2 text-xs font-bold uppercase ${isDark ? 'bg-slate-700' : 'bg-red-100 text-red-900'}`}>
-            <div className="w-6 pl-1">#</div>
-            <div className="flex-[2]">{t("Car Name")}</div>
-            <div className="flex-[1] text-center">{t("Qty")}</div>
-            <div className="w-8 text-center">Ed</div>
-          </div>
-        </div>
-
-        <div className="flex flex-col">
-          {visibleEntries.map((entry, index) => (
-            <EntryRow
-              key={entry.id}
-              index={index}
-              entry={entry}
-              t={t}
-              isDark={isDark}
-              onUpdateBuffer={updateQtyBuffer}
-              onEdit={setEditingEntry}
-              limit={data.settings.limit}
-              tempQty={tempChanges[entry.id]}
-            />
-          ))}
-        </div>
-
-        {filteredEntries.length > displayLimit && (
-          <button onClick={() => setDisplayLimit(prev => prev + 50)} className="w-full py-6 text-blue-500 font-bold opacity-80 border-t">
-            {t("Load More")}... ({t("Showing")} {visibleEntries.length} {t("of")} {filteredEntries.length})
-          </button>
-        )}
-
-        <DraggableFAB id="fab-add" onClick={() => setIsNewEntryOpen(true)} className="fixed z-20" initialBottom={96} initialRight={24}>
-          <div className="bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg border-2 border-white flex items-center justify-center">
-            <Plus size={28} />
-          </div>
-        </DraggableFAB>
-      </div>
-    );
-  };
 
   const renderAlerts = () => (
     <div className={`p-4 pb-24 min-h-screen ${isDark ? 'bg-slate-950 text-white' : 'bg-gray-50 text-black'}`}>
-      <div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-bold text-red-500 flex items-center gap-2"><AlertTriangle /> {t("Low Stock")}</h2><TranslateBtn /></div>
+      <div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-bold text-red-500 flex items-center gap-2"><AlertTriangle /> {t("Low Stock")}</h2><TranslateBtn isHindi={isHindi} setIsHindi={setIsHindi} isDark={isDark} /></div>
       {(data.entries || []).filter(e => e.qty < data.settings.limit).length === 0 && <div className="text-center mt-10 opacity-50">{t("Stock Full")}</div>}
       {(data.entries || []).filter(e => e.qty < data.settings.limit).map(e => {
         const p = (data.pages || []).find(page => page.id === e.pageId);
@@ -2751,7 +2669,26 @@ function DukanRegister() {
       {view === 'generalIndex' && renderGeneralIndex()}
       {view === 'pagesGrid' && renderPagesGrid()}
       {view === 'stockSearch' && renderStockSearch()}
-      {view === 'page' && renderPage()}
+      {view === 'page' && <ItemsPage 
+        activePage={activePage}
+        activePageId={activePageId} 
+        data={data}
+        isDark={isDark}
+        t={t}
+        isHindi={isHindi}
+        setIsHindi={setIsHindi}
+        setActivePageId={setActivePageId}
+        setView={setView}
+        pageSearchTerm={pageSearchTerm}
+        setPageSearchTerm={setPageSearchTerm}
+        displayLimit={displayLimit}
+        setDisplayLimit={setDisplayLimit}
+        setIsNewEntryOpen={setIsNewEntryOpen}
+        setEditingEntry={setEditingEntry}
+        setIsCopyModalOpen={setIsCopyModalOpen}
+        updateQtyBuffer={updateQtyBuffer}
+        tempChanges={tempChanges}
+    />}
       {view === 'alerts' && renderAlerts()}
       {view === 'settings' && <SettingsPanel
         isDark={isDark}

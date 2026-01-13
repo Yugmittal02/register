@@ -9,7 +9,7 @@ import {
 import { translateWithGoogle, transliterateWithGoogle, convertToHindiFallback } from '../lib/translation';
 import VoiceInput from './VoiceInput';
 
-const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onTogglePin, shopDetails }: any) => {
+export const ToolsHub = ({ onBack, t, isDark, initialTool = null, pinnedTools, onTogglePin, shopDetails }: any) => {
     const [activeTool, setActiveTool] = useState(initialTool);
     const [invoiceNumber] = useState(() => Date.now().toString().slice(-4));
     const [gstInput, setGstInput] = useState({ price: '', rate: 18, isReverse: false });
