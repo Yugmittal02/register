@@ -19,9 +19,6 @@
   <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
   <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
 
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest.json" />
-
   <!-- Preconnect for faster loading -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://firestore.googleapis.com" />
@@ -33,23 +30,6 @@
   <meta name="twitter:card" content="summary_large_image" />
 
   <title>AutoHub ERP System</title>
-
-  <!-- Early Service Worker Registration -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then((reg) => {
-            console.log('✅ Service Worker registered:', reg.scope);
-            // Check for updates
-            reg.addEventListener('updatefound', () => {
-              console.log('🔄 New version available');
-            });
-          })
-          .catch((err) => console.warn('❌ SW registration failed:', err));
-      });
-    }
-  </script>
 </head>
 
 <body>
